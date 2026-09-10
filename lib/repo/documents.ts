@@ -104,7 +104,11 @@ export async function updateDocument(id: string, input: Record<string, unknown>)
     if (input[field] !== undefined) data[field] = input[field]
   }
   if (typeof input.extractedText === 'string') {
-    await saveExtractedText(id, input.extractedText)
+    try {
+      await saveExtractedText(id, input.extractedText)
+    } catch (err) {
+      console.warn('Firebase Storage indisponível ao gravar extractedText:', err)
+    }
     data.extractedTextPreview = previewText(input.extractedText)
     data.textLength = input.extractedText.length
   }
@@ -114,7 +118,11 @@ export async function updateDocument(id: string, input: Record<string, unknown>)
 }
 
 export async function setDocumentExtractedText(id: string, extractedText: string, pageCount: number, readStatus: string) {
-  await saveExtractedText(id, extractedText)
+  try {
+    await saveExtractedText(id, extractedText)
+  } catch (err) {
+    console.warn('Firebase Storage indisponível ao gravar extractedText:', err)
+  }
   await getDb().collection(COLLECTION).doc(id).update({
     extractedTextPreview: previewText(extractedText),
     textLength: extractedText.length,

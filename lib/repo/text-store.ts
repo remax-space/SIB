@@ -27,7 +27,7 @@ export async function readExtractedText(documentId: string): Promise<string | nu
     const [buf] = await getBucket().file(extractedTextPath(documentId)).download()
     return buf.toString('utf8')
   } catch (err: any) {
-    if (err?.code === 404) return null
+    if (err?.code === 404 || /bucket does not exist/i.test(String(err?.message ?? ''))) return null
     throw err
   }
 }

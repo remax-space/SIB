@@ -113,7 +113,8 @@ export async function POST(request: NextRequest) {
           sendEvent({ status: 'agent_start', agent: 'basile', label: 'OPERADOR — Investigador' });
           await updateAnalysis(analysis.id, { currentAgent: 'basile' });
 
-          const basilePrompt = getBasilePrompt(missionLiteral, corpusText, caseData?.cutoffDate ?? undefined);
+          const cutoffDate = typeof caseData.cutoffDate === 'string' ? caseData.cutoffDate : undefined;
+          const basilePrompt = getBasilePrompt(missionLiteral, corpusText, cutoffDate);
           const basileRaw = await callLLM({ provider: providerKey, system: basilePrompt.system, user: basilePrompt.user, model, json: true, label: 'BASILE' });
           const basileResult = parseJSON(basileRaw);
           await updateAnalysis(analysis.id, { basileResult });
