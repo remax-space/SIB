@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const path = require('path');
+require('dotenv').config();
 
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',

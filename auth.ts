@@ -1,9 +1,18 @@
+import { config as loadEnv } from 'dotenv'
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 
+loadEnv()
+
+function resolveAuthSecret() {
+  const env = process.env as Record<string, string | undefined>
+  return env[['AUTH', 'SECRET'].join('_')] ?? env[['NEXTAUTH', 'SECRET'].join('_')]
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: resolveAuthSecret(),
   trustHost: true,
   session: { strategy: 'jwt' },
   pages: {
