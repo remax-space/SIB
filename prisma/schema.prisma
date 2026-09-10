@@ -1,10 +1,10 @@
 generator client {
     provider = "prisma-client-js"
-    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    binaryTargets = ["native"]
 }
 
 datasource db {
-    provider = "postgresql"
+    provider = "sqlite"
     url      = env("DATABASE_URL")
 }
 
@@ -17,8 +17,8 @@ model Case {
   classText   String
   primaryRole String
   status      String   @default("ATIVO")
-  objective   String?  @db.Text
-  notes       String?  @db.Text
+  objective   String?
+  notes       String?
   cutoffDate  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -37,7 +37,7 @@ model Document {
   mimeType        String
   sha256          String
   readStatus      String   @default("PENDENTE")
-  extractedText   String?  @db.Text
+  extractedText   String?
   pageCount       Int?
   uploadedAt      DateTime @default(now())
 }
@@ -47,13 +47,13 @@ model Analysis {
   caseId            String
   case              Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   jobId             String    @unique
-  missionLiteral    String    @db.Text
+  missionLiteral    String
   authorizedProduct String?
   provider          String    @default("openai")
   modelUsed         String?
   runMode           String    @default("COMPLETA")
   status            String    @default("PENDENTE")
-  documentIds       String[]
+  documentIds       Json
   currentAgent      String?
 
   basileResult      Json?
@@ -66,7 +66,7 @@ model Analysis {
 
   icpScore          Float?
   exitCode          Int?
-  errorDetail       String?   @db.Text
+  errorDetail       String?
 
   createdAt         DateTime  @default(now())
   completedAt       DateTime?
@@ -84,7 +84,7 @@ model ProviderConfig {
 model Setting {
   id    String @id @default(cuid())
   key   String @unique
-  value String @db.Text
+  value String
 }
 
 model User {

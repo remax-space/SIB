@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Análise não encontrada' }, { status: 404 });
     }
     const caseData = await prisma.case.findUnique({ where: { id: analysis.caseId } });
-    const documents = await prisma.document.findMany({ where: { id: { in: analysis.documentIds ?? [] } } });
+    const analysisDocumentIds = Array.isArray(analysis.documentIds) ? analysis.documentIds as string[] : []
+    const documents = await prisma.document.findMany({ where: { id: { in: analysisDocumentIds } } });
     const corpusText = (documents ?? [])
       .map((d: any) => `--- DOCUMENTO: ${d?.filename ?? 'sem nome'} ---\n${d?.extractedText ?? '(sem texto extraído)'}\n`)
       .join('\n');
