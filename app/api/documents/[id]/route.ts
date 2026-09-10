@@ -1,0 +1,48 @@
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
+import { deleteFile, getFileUrl } from '@/lib/s3';
+
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
+  try {
+    const { id } = await params;
+    const doc = await prisma.document.findUnique({ where: { id } });
+    if (!doc) return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
+    return NextResponse.json(doc);
+  } catch (error: any) {
+    console.error('Document GET error:', error);
+    return NextResponse.json({ error: 'Erro' }, { status: 500 });
+  }
+}
+
+export async function PATCH(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
+  try {
+    const { id } = await params;
+    const body = await _request.json();
+    const updated = await prisma.document.update({ where: { id }, data: body ?? {} });
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error('Document PATCH error:', error);
+    return NextResponse.json({ error: 'Erro ao atualizar documento' }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
+  try {
+    const { id } = await params;
+    const doc = await prisma.document.findUnique({ where: { id } });
+    if (doc) {
+      try { await deleteFile(doc.cloudStoragePath); } catch (e: any) { console.error('S3 delete error:', e); }
+      await prisma.document.delete({ where: { id } });
+    }
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Document DELETE error:', error);
+    return NextResponse.json({ error: 'Erro ao excluir documento' }, { status: 500 });
+  }
+}

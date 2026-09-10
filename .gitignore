@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.*
+
+# Next.js
+.next/
+out/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local databases and generated data
+*.db
+*.db-shm
+*.db-wal
+data/
+backups/
+
+# TypeScript/build output
+*.tsbuildinfo
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

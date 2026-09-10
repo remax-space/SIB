@@ -1,0 +1,111 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/sib_web/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Case {
+  id          String   @id @default(cuid())
+  caseId      String   @unique
+  title       String
+  clientName  String
+  clientDoc   String?
+  classText   String
+  primaryRole String
+  status      String   @default("ATIVO")
+  objective   String?  @db.Text
+  notes       String?  @db.Text
+  cutoffDate  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  documents   Document[]
+  analyses    Analysis[]
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  caseId          String
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  filename        String
+  cloudStoragePath String
+  isPublic        Boolean  @default(false)
+  fileSize        Int
+  mimeType        String
+  sha256          String
+  readStatus      String   @default("PENDENTE")
+  extractedText   String?  @db.Text
+  pageCount       Int?
+  uploadedAt      DateTime @default(now())
+}
+
+model Analysis {
+  id                String    @id @default(cuid())
+  caseId            String
+  case              Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  jobId             String    @unique
+  missionLiteral    String    @db.Text
+  authorizedProduct String?
+  provider          String    @default("openai")
+  modelUsed         String?
+  runMode           String    @default("COMPLETA")
+  status            String    @default("PENDENTE")
+  documentIds       String[]
+  currentAgent      String?
+
+  basileResult      Json?
+  advocadoResult    Json?
+  cabecaResult      Json?
+  auditorResult     Json?
+  mestreResult      Json?
+  orientacoesResult Json?
+  jurisprudenciaResult Json?
+
+  icpScore          Float?
+  exitCode          Int?
+  errorDetail       String?   @db.Text
+
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
+}
+
+model ProviderConfig {
+  id        String   @id @default(cuid())
+  provider  String   @unique
+  apiKey    String   @default("")
+  model     String
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+}
+
+model License {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  label       String
+  fingerprint String?
+  active      Boolean   @default(true)
+  revoked     Boolean   @default(false)
+  activatedAt DateTime?
+  lastSeenAt  DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+}

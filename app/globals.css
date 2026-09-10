@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* SIB Dark Professional Theme */
+    --background: 222 20% 5.5%;  /* #0D0F14 */
+    --foreground: 228 20% 93%;   /* #E8EAF0 */
+
+    --card: 222 18% 11%;          /* #1E2330 */
+    --card-foreground: 228 20% 93%;
+
+    --popover: 222 18% 11%;
+    --popover-foreground: 228 20% 93%;
+
+    --primary: 45 70% 47%;        /* #C9A227 gold */
+    --primary-foreground: 222 20% 5.5%;
+
+    --secondary: 222 18% 14%;
+    --secondary-foreground: 228 20% 93%;
+
+    --muted: 222 15% 16%;
+    --muted-foreground: 228 10% 60%;  /* #8B90A0 */
+
+    --accent: 222 18% 18%;
+    --accent-foreground: 228 20% 93%;
+
+    --destructive: 4 74% 57%;     /* #E74C3C */
+    --destructive-foreground: 0 0% 8%;
+
+    --border: 222 15% 18%;
+    --input: 222 15% 20%;
+    --ring: 45 70% 47%;
+
+    --radius: 0.625rem;
+    --radius-sm: calc(0.625rem - 4px);
+    --radius-lg: calc(0.625rem + 4px);
+    --radius-full: 9999px;
+
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-2xl: 48px;
+    --spacing-3xl: 64px;
+
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.2), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.25), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+    --duration-slow: 350ms;
+
+    --chart-1: 45 70% 47%;
+    --chart-2: 145 63% 42%;
+    --chart-3: 25 85% 52%;
+    --chart-4: 210 40% 50%;
+    --chart-5: 4 74% 57%;
+
+    --success: 145 63% 42%;   /* #27AE60 */
+    --warning: 25 80% 52%;    /* #E67E22 */
+  }
+
+  .dark {
+    --background: 222 20% 5.5%;
+    --foreground: 228 20% 93%;
+    --card: 222 18% 11%;
+    --card-foreground: 228 20% 93%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 228 20% 93%;
+    --primary: 45 70% 47%;
+    --primary-foreground: 222 20% 5.5%;
+    --secondary: 222 18% 14%;
+    --secondary-foreground: 228 20% 93%;
+    --muted: 222 15% 16%;
+    --muted-foreground: 228 10% 60%;
+    --accent: 222 18% 18%;
+    --accent-foreground: 228 20% 93%;
+    --destructive: 4 74% 57%;
+    --destructive-foreground: 0 0% 8%;
+    --border: 222 15% 18%;
+    --input: 222 15% 20%;
+    --ring: 45 70% 47%;
+    --radius: 0.625rem;
+    --chart-1: 45 70% 47%;
+    --chart-2: 145 63% 42%;
+    --chart-3: 25 85% 52%;
+    --chart-4: 210 40% 50%;
+    --chart-5: 4 74% 57%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(222 20% 5.5%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(222 15% 20%);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(222 15% 28%);
+}
+
+/* Gold accent glow */
+.gold-glow {
+  box-shadow: 0 0 20px rgba(201, 162, 39, 0.15);
+}
+
+/* ICP Score gradients */
+.icp-excellent { color: #C9A227; }
+.icp-good { color: #27AE60; }
+.icp-moderate { color: #3498DB; }
+.icp-low { color: #E67E22; }
+.icp-critical { color: #E74C3C; }
