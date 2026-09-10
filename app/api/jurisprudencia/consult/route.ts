@@ -4,37 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
-import { PROVIDER_MODELS } from '@/lib/constants';
 import { getJurisprudenciaPrompt } from '@/lib/agent-prompts';
+import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm';
 
 async function getSetting(key: string): Promise<string> {
   const s = await prisma.setting.findUnique({ where: { key } });
   return s?.value ?? '';
-}
-
-async function callLLM(systemPrompt: string, userPrompt: string, model: string): Promise<string> {
-  const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 8000,
-      response_format: { type: 'json_object' },
-    }),
-  });
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`LLM API error (${response.status}): ${errText}`);
-  }
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content ?? '{}';
 }
 
 function parseJSON(text: string): any {
@@ -129,12 +104,11 @@ export async function POST(request: NextRequest) {
     const searchResults = await fetchJurisprudencia(cfgProvider, apiKey, endpoint, searchQuery);
 
     // 4) Agente de Jurisprudência analisa APENAS os resultados reais
-    const providerKey = provider ?? analysis.provider ?? 'openai';
-    const modelInfo = PROVIDER_MODELS[providerKey] ?? PROVIDER_MODELS.openai;
-    const model = modelInfo?.model ?? 'gpt-5.4';
+    const providerKey = firstConfiguredProvider(provider ?? analysis.provider);
+    const model = getProviderModel(providerKey);
 
     const prompt = getJurisprudenciaPrompt(mission, corpusText, mestreOutput, orientadorOutput, searchResults);
-    const raw = await callLLM(prompt.system, prompt.user, model);
+    const raw = await callLLM({ provider: providerKey, system: prompt.system, user: prompt.user, model, json: true, label: 'JURISPRUDÊNCIA' });
     const jurisprudenciaResult = parseJSON(raw);
 
     await prisma.analysis.update({

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
-import { deleteFile, getFileUrl } from '@/lib/s3';
+import { deleteStoredFile } from '@/lib/storage';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -37,7 +37,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const { id } = await params;
     const doc = await prisma.document.findUnique({ where: { id } });
     if (doc) {
-      try { await deleteFile(doc.cloudStoragePath); } catch (e: any) { console.error('S3 delete error:', e); }
+      try { await deleteStoredFile(doc.cloudStoragePath); } catch (e: any) { console.error('Storage delete error:', e); }
       await prisma.document.delete({ where: { id } });
     }
     return NextResponse.json({ success: true });

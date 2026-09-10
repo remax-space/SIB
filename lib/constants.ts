@@ -59,10 +59,10 @@ export const ANALYSIS_STATUSES = [
   { value: 'ERRO', label: 'Erro', color: 'bg-red-500/20 text-red-400' },
 ] as const;
 
-export const PROVIDER_MODELS: Record<string, { label: string; model: string; icon: string }> = {
-  openai: { label: 'OpenAI', model: 'gpt-5.4', icon: '🤖' },
-  anthropic: { label: 'Anthropic', model: 'claude-sonnet-4-6', icon: '🧠' },
-  gemini: { label: 'Gemini', model: 'gemini-3.8-flash', icon: '✨' },
+export const PROVIDER_MODELS: Record<string, { label: string; model: string; icon: string; envVar: string }> = {
+  openai: { label: 'OpenAI', model: 'gpt-4o', icon: '🤖', envVar: 'OPENAI_API_KEY' },
+  anthropic: { label: 'Claude', model: 'claude-sonnet-4-20250514', icon: '🧠', envVar: 'ANTHROPIC_API_KEY' },
+  gemini: { label: 'Gemini', model: 'gemini-2.0-flash', icon: '✨', envVar: 'GEMINI_API_KEY' },
 };
 
 export const AGENTS = [

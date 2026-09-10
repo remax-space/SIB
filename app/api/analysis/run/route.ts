@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
-import { PROVIDER_MODELS, DEFAULT_MISSION } from '@/lib/constants';
+import { DEFAULT_MISSION } from '@/lib/constants';
+import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm';
 import {
   getBasilePrompt,
   getAdvogadoPrompt,
@@ -20,45 +21,6 @@ function generateJobId(): string {
   const pad = (n: number, len = 2) => String(n).padStart(len, '0');
   const rand = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
   return `SIB-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}-${rand}`;
-}
-
-async function callLLM(systemPrompt: string, userPrompt: string, model: string, agentLabel = 'Agente'): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000); // 120s por agente
-  try {
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 8000,
-        response_format: { type: 'json_object' },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`${agentLabel}: erro na IA (${response.status}): ${errText?.slice(0, 300)}`);
-    }
-
-    const data = await response.json();
-    return data?.choices?.[0]?.message?.content ?? '{}';
-  } catch (e: any) {
-    if (e?.name === 'AbortError') {
-      throw new Error(`${agentLabel}: tempo limite excedido (120s) ao consultar a IA.`);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function parseJSON(text: string): any {
@@ -96,9 +58,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const providerKey = provider ?? 'openai';
-    const modelInfo = PROVIDER_MODELS[providerKey] ?? PROVIDER_MODELS.openai;
-    const model = modelInfo?.model ?? 'gpt-5.4';
+    const providerKey = firstConfiguredProvider(provider);
+    const model = getProviderModel(providerKey);
     const mode = runMode ?? 'COMPLETA';
 
     // Get case + docs
@@ -148,7 +109,7 @@ export async function POST(request: NextRequest) {
           await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'basile' } });
 
           const basilePrompt = getBasilePrompt(missionLiteral, corpusText, caseData?.cutoffDate ?? undefined);
-          const basileRaw = await callLLM(basilePrompt.system, basilePrompt.user, model, 'BASILE');
+          const basileRaw = await callLLM({ provider: providerKey, system: basilePrompt.system, user: basilePrompt.user, model, json: true, label: 'BASILE' });
           const basileResult = parseJSON(basileRaw);
           await prisma.analysis.update({ where: { id: analysis.id }, data: { basileResult } });
           sendEvent({ status: 'agent_complete', agent: 'basile', label: 'BASILE — Investigador' });
@@ -168,7 +129,7 @@ export async function POST(request: NextRequest) {
           await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'advocado' } });
 
           const advPrompt = getAdvogadoPrompt(basileRaw, corpusText);
-          const advRaw = await callLLM(advPrompt.system, advPrompt.user, model, 'ADVOGADO DO DIABO');
+          const advRaw = await callLLM({ provider: providerKey, system: advPrompt.system, user: advPrompt.user, model, json: true, label: 'ADVOGADO DO DIABO' });
           const advocadoResult = parseJSON(advRaw);
           await prisma.analysis.update({ where: { id: analysis.id }, data: { advocadoResult } });
           sendEvent({ status: 'agent_complete', agent: 'advocado', label: 'ADVOGADO DO DIABO' });
@@ -178,7 +139,7 @@ export async function POST(request: NextRequest) {
           await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'cabeca' } });
 
           const cabPrompt = getCabecaPrompt(basileRaw, advRaw, corpusText);
-          const cabRaw = await callLLM(cabPrompt.system, cabPrompt.user, model, 'CABEÇA DO JUIZ');
+          const cabRaw = await callLLM({ provider: providerKey, system: cabPrompt.system, user: cabPrompt.user, model, json: true, label: 'CABEÇA DO JUIZ' });
           const cabecaResult = parseJSON(cabRaw);
           await prisma.analysis.update({ where: { id: analysis.id }, data: { cabecaResult } });
           sendEvent({ status: 'agent_complete', agent: 'cabeca', label: 'CABEÇA DO JUIZ' });
@@ -188,7 +149,7 @@ export async function POST(request: NextRequest) {
           await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'auditor' } });
 
           const audPrompt = getAuditorPrompt(basileRaw, advRaw, cabRaw);
-          const audRaw = await callLLM(audPrompt.system, audPrompt.user, model, 'AUDITOR DOCUMENTAL');
+          const audRaw = await callLLM({ provider: providerKey, system: audPrompt.system, user: audPrompt.user, model, json: true, label: 'AUDITOR DOCUMENTAL' });
           const auditorResult = parseJSON(audRaw);
           const icpScore = auditorResult?.icp_basile?.total ?? null;
           await prisma.analysis.update({ where: { id: analysis.id }, data: { auditorResult, icpScore } });
@@ -199,7 +160,7 @@ export async function POST(request: NextRequest) {
           await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'mestre' } });
 
           const mesPrompt = getMestrePrompt(basileRaw, advRaw, cabRaw, audRaw);
-          const mesRaw = await callLLM(mesPrompt.system, mesPrompt.user, model, 'MESTRE');
+          const mesRaw = await callLLM({ provider: providerKey, system: mesPrompt.system, user: mesPrompt.user, model, json: true, label: 'MESTRE' });
           const mestreResult = parseJSON(mesRaw);
           await prisma.analysis.update({ where: { id: analysis.id }, data: { mestreResult } });
           sendEvent({ status: 'agent_complete', agent: 'mestre', label: 'MESTRE' });
@@ -209,7 +170,7 @@ export async function POST(request: NextRequest) {
           await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'orientacoes' } });
 
           const oriPrompt = getOrientacoesPrompt(missionLiteral, corpusText, basileRaw, advRaw, cabRaw, audRaw, mesRaw);
-          const oriRaw = await callLLM(oriPrompt.system, oriPrompt.user, model, 'ORIENTADOR');
+          const oriRaw = await callLLM({ provider: providerKey, system: oriPrompt.system, user: oriPrompt.user, model, json: true, label: 'ORIENTADOR' });
           const orientacoesResult = parseJSON(oriRaw);
           await prisma.analysis.update({
             where: { id: analysis.id },

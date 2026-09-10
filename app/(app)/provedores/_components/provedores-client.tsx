@@ -85,7 +85,7 @@ export function ProvedoresClient() {
       </FadeIn>
 
       <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground">
-        🔒 As análises utilizam a API interna da plataforma. A configuração abaixo permite personalizar modelos e parâmetros.
+        As chaves ficam no <span className="font-mono">.env</span>: <span className="font-mono">OPENAI_API_KEY</span>, <span className="font-mono">ANTHROPIC_API_KEY</span> e <span className="font-mono">GEMINI_API_KEY</span>. Reinicie o servidor depois de colar.
       </div>
 
       <Stagger className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -102,6 +102,11 @@ export function ProvedoresClient() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    {prov?.hasKey
+                      ? `Chave lida de ${prov?.envVar ?? def?.envVar}`
+                      : `Falta ${prov?.envVar ?? def?.envVar} no .env`}
+                  </p>
                   <div className="space-y-1">
                     <Label className="text-xs">Modelo</Label>
                     <Input
