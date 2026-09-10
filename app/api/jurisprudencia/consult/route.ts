@@ -1,16 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { getAnalysisById, getCaseById, getDocumentsWithText, getSetting, updateAnalysis } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { getJurisprudenciaPrompt } from '@/lib/agent-prompts';
 import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm';
-
-async function getSetting(key: string): Promise<string> {
-  const s = await prisma.setting.findUnique({ where: { key } });
-  return s?.value ?? '';
-}
 
 function parseJSON(text: string): any {
   try {
@@ -18,7 +13,17 @@ function parseJSON(text: string): any {
     if (clean.startsWith('```')) {
       clean = clean.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
-    return JSON.parse(clean);
+    if (!clean.startsWith('{') && !clean.startsWith('[')) {
+      const start = clean.indexOf('{');
+      const end = clean.lastIndexOf('}');
+      if (start >= 0 && end > start) clean = clean.slice(start, end + 1);
+    }
+    const parsed = JSON.parse(clean);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      delete parsed.missao_registrada;
+      delete parsed.registros_obediencia;
+    }
+    return parsed;
   } catch {
     return { raw_text: text };
   }
@@ -84,13 +89,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 2) Carrega a análise + caso + corpus
-    const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } });
+    const analysis = await getAnalysisById(analysisId);
     if (!analysis) {
       return NextResponse.json({ error: 'Análise não encontrada' }, { status: 404 });
     }
-    const caseData = await prisma.case.findUnique({ where: { id: analysis.caseId } });
+    const caseData = await getCaseById(String(analysis.caseId));
     const analysisDocumentIds = Array.isArray(analysis.documentIds) ? analysis.documentIds as string[] : []
-    const documents = await prisma.document.findMany({ where: { id: { in: analysisDocumentIds } } });
+    const documents = await getDocumentsWithText(analysisDocumentIds);
     const corpusText = (documents ?? [])
       .map((d: any) => `--- DOCUMENTO: ${d?.filename ?? 'sem nome'} ---\n${d?.extractedText ?? '(sem texto extraído)'}\n`)
       .join('\n');
@@ -111,10 +116,7 @@ export async function POST(request: NextRequest) {
     const raw = await callLLM({ provider: providerKey, system: prompt.system, user: prompt.user, model, json: true, label: 'JURISPRUDÊNCIA' });
     const jurisprudenciaResult = parseJSON(raw);
 
-    await prisma.analysis.update({
-      where: { id: analysisId },
-      data: { jurisprudenciaResult },
-    });
+    await updateAnalysis(analysisId, { jurisprudenciaResult });
 
     return NextResponse.json({ status: 'ok', jurisprudenciaResult });
   } catch (error: any) {

@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-
-const prisma = new PrismaClient()
+import { upsertUser } from '../lib/repo/users'
 
 async function main() {
   const email = (process.env.MASTER_EMAIL ?? 'mestre@sib.local').trim().toLowerCase()
@@ -12,29 +10,17 @@ async function main() {
     throw new Error('MASTER_PASSWORD is empty')
   }
 
-  await prisma.user.upsert({
-    where: { email },
-    update: {
-      password: await bcrypt.hash(password, 10),
-      name,
-      role: 'ADMIN',
-    },
-    create: {
-      email,
-      password: await bcrypt.hash(password, 10),
-      name,
-      role: 'ADMIN',
-    },
+  await upsertUser({
+    email,
+    password: await bcrypt.hash(password, 10),
+    name,
+    role: 'ADMIN',
   })
 
   console.log(`Master ADMIN ready: ${email}`)
 }
 
-main()
-  .catch((err) => {
-    console.error(err)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

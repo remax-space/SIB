@@ -20,9 +20,9 @@ const PROVIDERS = [
 ]
 
 function favorColor(f?: string) {
-  return f === 'FAVORAVEL' ? 'bg-emerald-500/20 text-emerald-400'
-    : f === 'CONTRARIO' ? 'bg-red-500/20 text-red-400'
-    : 'bg-blue-500/20 text-blue-400'
+  return f === 'FAVORAVEL' ? 'bg-success/20 text-success'
+    : f === 'CONTRARIO' ? 'bg-destructive/20 text-destructive'
+    : 'bg-info/20 text-info'
 }
 
 export function JurisprudenciaClient() {
@@ -139,11 +139,11 @@ export function JurisprudenciaClient() {
       />
 
       {/* Status do gate */}
-      <Card className={connected ? 'border-emerald-500/40' : 'border-yellow-500/40'}>
+      <Card className={connected ? 'border-success/40' : 'border-warning/40'}>
         <CardContent className="p-5">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-lg shrink-0 ${connected ? 'bg-emerald-500/10' : 'bg-yellow-500/10'}`}>
-              {connected ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Lock className="w-5 h-5 text-yellow-400" />}
+            <div className={`p-2 rounded-lg shrink-0 ${connected ? 'bg-success/10' : 'bg-warning/10'}`}>
+              {connected ? <CheckCircle2 className="w-5 h-5 text-success" /> : <Lock className="w-5 h-5 text-warning" />}
             </div>
             <div>
               <h3 className="text-sm font-bold text-foreground">
@@ -183,7 +183,7 @@ export function JurisprudenciaClient() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Chave de API {cfg?.hasKey && <span className="text-emerald-400">(uma chave já está cadastrada: {cfg.keyMasked})</span>}</Label>
+              <Label className="text-xs">Chave de API {cfg?.hasKey && <span className="text-success">(uma chave já está cadastrada: {cfg.keyMasked})</span>}</Label>
               <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={cfg?.hasKey ? 'Deixe em branco para manter a chave atual' : 'Cole aqui a chave da API contratada'} />
             </div>
             <div className="flex items-center gap-2">
@@ -233,8 +233,8 @@ export function JurisprudenciaClient() {
           </Button>
 
           {waitingKey && (
-            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-              <p className="text-sm text-yellow-300">
+            <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
+              <p className="text-sm text-warning">
                 A base de jurisprudência ainda não foi conectada. Cadastre a chave da API contratada (acima, acesso administrador) para ativar a pesquisa de precedentes reais. O sistema não inventa jurisprudência.
               </p>
             </div>
@@ -246,9 +246,9 @@ export function JurisprudenciaClient() {
       {result && (
         <div className="space-y-4">
           {result?.sem_resultados ? (
-            <Card className="border-yellow-500/40">
+            <Card className="border-warning/40">
               <CardContent className="p-5">
-                <p className="text-sm text-yellow-300">Nenhum precedente foi retornado pela base para esta consulta. O agente não produz jurisprudência sem resultados reais.</p>
+                <p className="text-sm text-warning">Nenhum precedente foi retornado pela base para esta consulta. O agente não produz jurisprudência sem resultados reais.</p>
               </CardContent>
             </Card>
           ) : (
@@ -286,7 +286,7 @@ export function JurisprudenciaClient() {
                       <div key={i} className="p-3 bg-muted/50 rounded-lg">
                         <p className="text-sm font-medium">{m?.ponto_do_mestre ?? '—'}</p>
                         {m?.risco && <p className="text-xs text-destructive mt-1">Risco: {m.risco}</p>}
-                        {m?.ajuste_sugerido && <p className="text-[11px] text-emerald-400 mt-1">Ajuste: {m.ajuste_sugerido}</p>}
+                        {m?.ajuste_sugerido && <p className="text-[11px] text-success mt-1">Ajuste: {m.ajuste_sugerido}</p>}
                       </div>
                     ))}
                   </CardContent>

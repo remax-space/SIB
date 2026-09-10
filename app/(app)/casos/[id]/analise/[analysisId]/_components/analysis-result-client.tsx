@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FadeIn, SlideIn } from '@/components/ui/animate'
 import { ArrowLeft, Download, Loader2, AlertTriangle } from 'lucide-react'
 import { ANALYSIS_STATUSES, AGENTS, getIcpClass, getIcpLabel } from '@/lib/constants'
+import { formatAgentOutput, normalizeAgentResult } from '@/lib/format-agent-output'
 
 export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; analysisId: string }) {
   const router = useRouter()
@@ -74,25 +75,25 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
   if (!analysis || analysis?.error) return <p className="text-destructive">Análise não encontrada.</p>
 
   const statusDef = ANALYSIS_STATUSES?.find((s: any) => s?.value === analysis?.status)
-  const basile = analysis?.basileResult ?? {}
-  const advocado = analysis?.advocadoResult ?? {}
-  const cabeca = analysis?.cabecaResult ?? {}
-  const auditor = analysis?.auditorResult ?? {}
-  const mestre = analysis?.mestreResult ?? {}
-  const orientacoes = analysis?.orientacoesResult ?? {}
+  const basile = normalizeAgentResult(analysis?.basileResult) ?? {}
+  const advocado = normalizeAgentResult(analysis?.advocadoResult) ?? {}
+  const cabeca = normalizeAgentResult(analysis?.cabecaResult) ?? {}
+  const auditor = normalizeAgentResult(analysis?.auditorResult) ?? {}
+  const mestre = normalizeAgentResult(analysis?.mestreResult) ?? {}
+  const orientacoes = normalizeAgentResult(analysis?.orientacoesResult) ?? {}
   const icp = auditor?.icp_basile ?? {}
 
   const gravColor = (g: string) =>
-    g === 'CRITICA' ? 'bg-red-600/25 text-red-300'
-    : g === 'ALTA' ? 'bg-red-500/20 text-red-400'
-    : g === 'MEDIA' ? 'bg-yellow-500/20 text-yellow-400'
-    : 'bg-blue-500/20 text-blue-400'
+    g === 'CRITICA' ? 'bg-destructive/25 text-destructive'
+    : g === 'ALTA' ? 'bg-destructive/20 text-destructive'
+    : g === 'MEDIA' ? 'bg-warning/20 text-warning'
+    : 'bg-info/20 text-info'
 
   const concordColor = (c: string) =>
-    c === 'CONCORDA_TOTALMENTE' ? 'text-emerald-400'
-    : c === 'CONCORDA_COM_RESSALVAS' ? 'text-yellow-400'
-    : c === 'DISCORDA_PARCIALMENTE' ? 'text-orange-400'
-    : 'text-red-400'
+    c === 'CONCORDA_TOTALMENTE' ? 'text-success'
+    : c === 'CONCORDA_COM_RESSALVAS' ? 'text-warning'
+    : c === 'DISCORDA_PARCIALMENTE' ? 'text-warning'
+    : 'text-destructive'
 
   return (
     <div className="space-y-6">
@@ -130,7 +131,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
         {analysis?.status === 'EM_ANDAMENTO' && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Agente atual: {analysis?.currentAgent ?? '...'}
+            Agente atual: {AGENTS.find((a) => a.key === analysis?.currentAgent)?.label ?? analysis?.currentAgent ?? '...'}
           </div>
         )}
         {analysis?.icpScore != null && (
@@ -169,15 +170,10 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
             )) ?? []}
           </TabsList>
 
-          {/* BASILE */}
+          {/* OPERADOR */}
           <TabsContent value="basile">
             <SlideIn from="bottom">
               <div className="space-y-4">
-                {basile?.missao_registrada && (
-                  <Card><CardHeader><CardTitle className="text-sm">📋 Missão Registrada</CardTitle></CardHeader>
-                    <CardContent><p className="text-sm">{basile.missao_registrada}</p></CardContent>
-                  </Card>
-                )}
                 {basile?.linha_estado_processual && (
                   <Card><CardHeader><CardTitle className="text-sm">📍 Linha de Estado Processual</CardTitle></CardHeader>
                     <CardContent><p className="text-sm">{basile.linha_estado_processual}</p></CardContent>
@@ -272,6 +268,18 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                     <CardContent><p className="text-sm">{basile.tese_principal}</p></CardContent>
                   </Card>
                 )}
+                {basile?.observacoes && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm">📌 Conduta Recomendada</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm">{basile.observacoes}</p></CardContent>
+                  </Card>
+                )}
+                {!basile?.linha_estado_processual && !basile?.tese_principal && (basile?.cronologia?.length ?? 0) === 0 && (basile?.fatos_provas?.length ?? 0) === 0 && analysis?.basileResult && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm">Resultado</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm whitespace-pre-wrap">{formatAgentOutput(analysis.basileResult, 'basile')}</p></CardContent>
+                  </Card>
+                )}
               </div>
             </SlideIn>
           </TabsContent>
@@ -287,7 +295,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                         {(advocado.contra_argumentos ?? []).map((ca: any, i: number) => (
                           <div key={i} className="p-3 bg-muted/50 rounded-lg">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${ca?.gravidade === 'ALTA' ? 'bg-red-500/20 text-red-400' : ca?.gravidade === 'MEDIA' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${ca?.gravidade === 'ALTA' ? 'bg-destructive/20 text-destructive' : ca?.gravidade === 'MEDIA' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info'}`}>
                                 {ca?.gravidade ?? 'N/A'}
                               </span>
                               <span className="text-xs text-muted-foreground">Ataca: {ca?.tese_atacada ?? '—'}</span>
@@ -318,6 +326,12 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                     </CardContent>
                   </Card>
                 )}
+                {(advocado?.contra_argumentos?.length ?? 0) === 0 && !advocado?.tese_contraparte && (advocado?.pontos_frageis?.length ?? 0) === 0 && analysis?.advocadoResult && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm">Resultado</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm whitespace-pre-wrap">{formatAgentOutput(analysis.advocadoResult, 'advocado')}</p></CardContent>
+                  </Card>
+                )}
               </div>
             </SlideIn>
           </TabsContent>
@@ -329,7 +343,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                 {cabeca?.probabilidade_acolhimento && (
                   <Card><CardHeader><CardTitle className="text-sm">⚖️ Probabilidade de Acolhimento</CardTitle></CardHeader>
                     <CardContent>
-                      <span className={`text-lg font-bold ${cabeca.probabilidade_acolhimento === 'ALTA' ? 'text-emerald-400' : cabeca.probabilidade_acolhimento === 'MEDIA' ? 'text-yellow-400' : cabeca.probabilidade_acolhimento === 'BAIXA' ? 'text-red-400' : 'text-muted-foreground'}`}>
+                      <span className={`text-lg font-bold ${cabeca.probabilidade_acolhimento === 'ALTA' ? 'text-success' : cabeca.probabilidade_acolhimento === 'MEDIA' ? 'text-warning' : cabeca.probabilidade_acolhimento === 'BAIXA' ? 'text-destructive' : 'text-muted-foreground'}`}>
                         {cabeca.probabilidade_acolhimento}
                       </span>
                     </CardContent>
@@ -357,6 +371,12 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                 {cabeca?.recomendacao_judicial && (
                   <Card className="border-primary/30"><CardHeader><CardTitle className="text-sm">💡 Recomendação Judicial</CardTitle></CardHeader>
                     <CardContent><p className="text-sm">{cabeca.recomendacao_judicial}</p></CardContent>
+                  </Card>
+                )}
+                {!cabeca?.probabilidade_acolhimento && !cabeca?.fundamento_decisao_provavel && !cabeca?.recomendacao_judicial && (cabeca?.riscos_judiciais?.length ?? 0) === 0 && analysis?.cabecaResult && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm">Resultado</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm whitespace-pre-wrap">{formatAgentOutput(analysis.cabecaResult, 'cabeca')}</p></CardContent>
                   </Card>
                 )}
               </div>
@@ -416,6 +436,12 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                         ))}
                       </div>
                     </CardContent>
+                  </Card>
+                )}
+                {icp?.total == null && (auditor?.classificacao_epistemica?.length ?? 0) === 0 && analysis?.auditorResult && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm">Resultado</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm whitespace-pre-wrap">{formatAgentOutput(analysis.auditorResult, 'auditor')}</p></CardContent>
                   </Card>
                 )}
               </div>
@@ -483,6 +509,12 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                     <CardContent><p className="text-sm font-medium">{mestre.proximo_movimento}</p></CardContent>
                   </Card>
                 )}
+                {!mestre?.sintese_executiva && !mestre?.decisao_necessaria && !mestre?.proximo_movimento && (mestre?.medidas_prioritarias?.length ?? 0) === 0 && analysis?.mestreResult && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm">Resultado</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm whitespace-pre-wrap">{formatAgentOutput(analysis.mestreResult, 'mestre')}</p></CardContent>
+                  </Card>
+                )}
               </div>
             </SlideIn>
           </TabsContent>
@@ -517,7 +549,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                               {e?.onde && <span className="text-xs text-muted-foreground">Onde: {e.onde}</span>}
                             </div>
                             <p className="text-sm">{e?.descricao ?? '—'}</p>
-                            {e?.correcao && <p className="text-xs text-emerald-400 mt-1">Correção: {e.correcao}</p>}
+                            {e?.correcao && <p className="text-xs text-success mt-1">Correção: {e.correcao}</p>}
                           </div>
                         ))}
                       </div>

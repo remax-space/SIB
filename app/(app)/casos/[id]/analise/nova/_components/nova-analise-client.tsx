@@ -228,7 +228,7 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
                 className="w-full bg-card border border-input rounded-lg px-3 py-2 text-sm text-foreground"
               >
                 <option value="COMPLETA">Análise Completa (5 Agentes)</option>
-                <option value="SOMENTE_BASILE">Somente BASILE</option>
+                <option value="SOMENTE_BASILE">Somente OPERADOR</option>
               </select>
             </div>
           </div>
@@ -259,13 +259,13 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
                   return (
                     <div key={agent?.key} className="flex items-center gap-3">
                       {s === 'done' ? (
-                        <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        <CheckCircle className="w-4 h-4 text-success" />
                       ) : s === 'running' ? (
                         <Loader2 className="w-4 h-4 text-primary animate-spin" />
                       ) : (
                         <div className="w-4 h-4 rounded-full border border-border" />
                       )}
-                      <span className={`text-sm ${s === 'running' ? 'text-primary font-medium' : s === 'done' ? 'text-emerald-400' : 'text-muted-foreground'}`}>
+                      <span className={`text-sm ${s === 'running' ? 'text-primary font-medium' : s === 'done' ? 'text-success' : 'text-muted-foreground'}`}>
                         {agent?.icon} {agent?.label} — {agent?.subtitle}
                       </span>
                     </div>

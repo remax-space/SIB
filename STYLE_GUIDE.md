@@ -28,22 +28,29 @@ Always use `tracking-tight` on large headings (`text-2xl` and above).
 
 ## Color System (Design Tokens)
 
-All colors use CSS variables — **never hardcode color values**.
+All colors use CSS variables — **never hardcode color values**. `:root` is the light theme; `.dark` is the professional navy theme (pixel-identical to the original SIB dark). Theme resolution defaults to the OS (`prefers-color-scheme`) and is persisted in `localStorage` under `sib-theme`.
 
-| Token | Purpose |
-|-------|---------|
-| `background` / `foreground` | Page-level bg and text |
-| `card` / `card-foreground` | Card surfaces |
-| `primary` / `primary-foreground` | Brand buttons, links, accents |
-| `secondary` / `secondary-foreground` | Secondary buttons, subtle highlights |
-| `muted` / `muted-foreground` | Disabled states, helper text, subtle backgrounds |
-| `accent` / `accent-foreground` | Hover states, active nav items |
-| `destructive` / `destructive-foreground` | Errors, delete actions |
-| `border` | Borders and dividers |
-| `input` | Form input borders |
-| `ring` | Focus rings |
+| Token | Purpose | Light | Dark |
+|-------|---------|-------|------|
+| `background` / `foreground` | Page-level bg and text | `#FBFAF7` / `#171C26` | `#0D0F14` / `#E8EAF0` |
+| `card` / `card-foreground` | Card surfaces | white / navy text | `#1E2330` / `#E8EAF0` |
+| `primary` / `primary-foreground` | Brand buttons, links, accents | `#99791F` (AA) | `#C9A227` gold |
+| `secondary` / `secondary-foreground` | Secondary buttons, subtle highlights | warm cream | navy 14% |
+| `muted` / `muted-foreground` | Disabled states, helper text | warm gray | `#8B90A0` |
+| `accent` / `accent-foreground` | Hover states | warm cream | navy 18% |
+| `destructive` / `destructive-foreground` | Errors, delete actions | deep red | `#E74C3C` |
+| `border` / `input` / `ring` | Borders, fields, focus | warm stone / gold | navy / gold |
+| `success` / `warning` / `info` | Status semantics | deeper for AA | `#27AE60` / `#E67E22` / blue |
+| `nav` / `nav-hover` / `nav-foreground` | Nav + navy action buttons | soft navy tint | `#16304f` / `#1c3b60` / slate-100 |
+| `nav-active` / `nav-active-foreground` | Selected nav item | `#16304f` / cream | slate-100 / `#12233d` |
+| `nav-border` | Navy borders | cool stone | `#24456b` |
+| `surface` / `surface-2` / `field` | Panels and inputs | off-white / white | `#141b28` / `#1a3050` / `#0D0F14` |
+| `overlay` | Modal backdrops | navy 8% | black |
+| `danger-surface` | Destructive chrome (SAIR) | soft red | `#3a1620` |
 
-Usage: `bg-primary`, `text-muted-foreground`, `border-border`, etc.
+Usage: `bg-primary`, `text-muted-foreground`, `bg-nav`, `text-success`, `border-nav-border`, etc.
+
+**Theme controls:** `ThemeToggle` (`@/components/theme-toggle`) — compact dropdown (Claro / Escuro / Sistema) for chrome. `ThemeSelector` (`@/components/theme-selector`) — preview cards for Settings. Both use `applyTheme()` (`@/lib/theme`) for a circular View Transition from the click origin.
 
 ---
 
@@ -73,7 +80,7 @@ Based on an 8px grid. Use these CSS variables or Tailwind equivalents:
 | `--shadow-md` | Cards, dropdowns, popovers |
 | `--shadow-lg` | Modals, elevated panels |
 
-These are CSS variables only — use them directly in inline styles or custom CSS as `var(--shadow-sm)` etc. They are not mapped to Tailwind's `shadow-*` utilities.
+Mapped to Tailwind: `shadow-sm`, `shadow-md`, `shadow-lg`. Light shadows are soft; dark shadows keep the original heavier navy elevation.
 
 ---
 
@@ -153,9 +160,9 @@ Centered card on gradient background. Use for login, signup, onboarding flows.
 ### Core
 | Component | Import | Key Props |
 |-----------|--------|-----------|
-| `Button` | `@/components/ui/button` | `variant` (`default`\|`secondary`\|`outline`\|`ghost`\|`destructive`\|`link`\|`glass-dark`\|`glass-light`), `size` (`default`\|`xs`\|`sm`\|`lg`\|`icon`\|`icon-sm`), `loading` (boolean). **`glass-dark`**: for dark/vivid backgrounds. **`glass-light`**: for light/pale backgrounds. **Link**: focus uses underline, not ring. |
+| `Button` | `@/components/ui/button` | `variant` (`default`\|`secondary`\|`outline`\|`ghost`\|`destructive`\|`link`\|`glass`), `size` (`default`\|`xs`\|`sm`\|`lg`\|`icon`\|`icon-sm`), `loading` (boolean). **`glass`** (and legacy `glass-dark`/`glass-light` aliases) derives from `--foreground` and works in both themes. **Link**: focus uses underline, not ring. |
 | `Badge` | `@/components/ui/badge` | `variant` (`default`\|`secondary`\|`outline`\|`destructive`) |
-| `Card` | `@/components/ui/card` | `variant` (`default`\|`interactive`\|`glass-dark`\|`glass-dark-interactive`\|`glass-light`\|`glass-light-interactive`\|`ghost`). Composed: `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`. **Interactive**: always wrap in `<a>` or `<button>` for keyboard access. |
+| `Card` | `@/components/ui/card` | `variant` (`default`\|`interactive`\|`glass`\|`glass-interactive`\|`ghost`; legacy `glass-dark`/`glass-light` aliases remain). Composed: `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`. **Interactive**: always wrap in `<a>` or `<button>` for keyboard access. |
 | `Separator` | `@/components/ui/separator` | `orientation` (`horizontal`\|`vertical`) |
 
 ### Forms
@@ -218,7 +225,8 @@ Centered card on gradient background. Use for login, signup, onboarding flows.
 | `Toggle` | `@/components/ui/toggle` |
 | `ToggleGroup` | `@/components/ui/toggle-group` |
 | `Collapsible` | `@/components/ui/collapsible` |
-| `ThemeToggle` | `@/components/theme-toggle` — light/dark mode switch |
+| `ThemeToggle` | `@/components/theme-toggle` — Claro / Escuro / Sistema dropdown |
+| `ThemeSelector` | `@/components/theme-selector` — preview cards for Settings |
 ## SSR / Hydration Safety — `@/components/client-only`, `@/components/safe-format`
 Server-rendered HTML must match the client's first render. An automated SSR lint
 (`eslint.ssr.config.mjs` — do not delete) runs after every build and fails it on unsafe

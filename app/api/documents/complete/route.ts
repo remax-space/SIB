@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { createDocument } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import crypto from 'crypto';
 
@@ -17,17 +17,15 @@ export async function POST(request: NextRequest) {
 
     const sha256 = crypto.createHash('sha256').update(`${cloud_storage_path}-${Date.now()}`).digest('hex');
 
-    const doc = await prisma.document.create({
-      data: {
-        caseId,
-        filename: fileName,
-        cloudStoragePath: cloud_storage_path,
-        isPublic: false,
-        fileSize: fileSize ?? 0,
-        mimeType: contentType ?? 'application/pdf',
-        sha256,
-        readStatus: 'PENDENTE',
-      },
+    const doc = await createDocument({
+      caseId,
+      filename: fileName,
+      cloudStoragePath: cloud_storage_path,
+      isPublic: false,
+      fileSize: fileSize ?? 0,
+      mimeType: contentType ?? 'application/pdf',
+      sha256,
+      readStatus: 'PENDENTE',
     });
 
     return NextResponse.json(doc, { status: 201 });

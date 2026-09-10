@@ -7,6 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Sistema de Inteligência Basile — análise jurídica com IA',
     start_url: '/',
     display: 'standalone',
+    // Manifest splash is static; brand navy is the install/splash identity.
+    // Runtime chrome theme-color follows prefers-color-scheme via app/layout viewport.
     background_color: '#0D0F14',
     theme_color: '#0D0F14',
     icons: [

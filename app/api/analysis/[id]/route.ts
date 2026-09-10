@@ -1,14 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { deleteAnalysisRecord, getAnalysisById } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
   try {
     const { id } = await params;
-    await prisma.analysis.delete({ where: { id } });
+    await deleteAnalysisRecord(id);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('Analysis DELETE error:', error);
@@ -20,10 +20,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
   try {
     const { id } = await params;
-    const analysis = await prisma.analysis.findUnique({
-      where: { id },
-      include: { case: { select: { id: true, caseId: true, title: true, clientName: true, classText: true, cutoffDate: true } } },
-    });
+    const analysis = await getAnalysisById(id, true);
 
     if (!analysis) {
       return NextResponse.json({ error: 'Análise não encontrada' }, { status: 404 });

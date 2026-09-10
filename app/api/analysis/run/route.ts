@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { createAnalysis, getCaseById, getDocumentsWithText, updateAnalysis } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { DEFAULT_MISSION } from '@/lib/constants';
@@ -25,12 +25,21 @@ function generateJobId(): string {
 
 function parseJSON(text: string): any {
   try {
-    // Remove markdown code blocks if present
     let clean = text?.trim() ?? '{}';
     if (clean.startsWith('```')) {
       clean = clean.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
-    return JSON.parse(clean);
+    if (!clean.startsWith('{') && !clean.startsWith('[')) {
+      const start = clean.indexOf('{');
+      const end = clean.lastIndexOf('}');
+      if (start >= 0 && end > start) clean = clean.slice(start, end + 1);
+    }
+    const parsed = JSON.parse(clean);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      delete parsed.missao_registrada;
+      delete parsed.registros_obediencia;
+    }
+    return parsed;
   } catch {
     return { raw_text: text };
   }
@@ -63,14 +72,12 @@ export async function POST(request: NextRequest) {
     const mode = runMode ?? 'COMPLETA';
 
     // Get case + docs
-    const caseData = await prisma.case.findUnique({ where: { id: caseId } });
+    const caseData = await getCaseById(caseId);
     if (!caseData) {
       return new Response(JSON.stringify({ error: 'Caso não encontrado' }), { status: 404 });
     }
 
-    const documents = await prisma.document.findMany({
-      where: { id: { in: documentIds } },
-    });
+    const documents = await getDocumentsWithText(documentIds);
 
     const corpusText = (documents ?? [])
       .map((d: any) => `--- DOCUMENTO: ${d?.filename ?? 'sem nome'} ---\n${d?.extractedText ?? '(sem texto extraído)'}\n`)
@@ -78,19 +85,17 @@ export async function POST(request: NextRequest) {
 
     // Create analysis record
     const jobId = generateJobId();
-    const analysis = await prisma.analysis.create({
-      data: {
-        caseId,
-        jobId,
-        missionLiteral,
-        authorizedProduct: authorizedProduct ?? null,
-        provider: providerKey,
-        modelUsed: model,
-        runMode: mode,
-        status: 'EM_ANDAMENTO',
-        documentIds,
-        currentAgent: 'basile',
-      },
+    const analysis = await createAnalysis({
+      caseId,
+      jobId,
+      missionLiteral,
+      authorizedProduct: authorizedProduct ?? null,
+      provider: providerKey,
+      modelUsed: model,
+      runMode: mode,
+      status: 'EM_ANDAMENTO',
+      documentIds,
+      currentAgent: 'basile',
     });
 
     // SSE Stream
@@ -105,20 +110,17 @@ export async function POST(request: NextRequest) {
 
         try {
           // AGENT 1: BASILE
-          sendEvent({ status: 'agent_start', agent: 'basile', label: 'BASILE — Investigador' });
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'basile' } });
+          sendEvent({ status: 'agent_start', agent: 'basile', label: 'OPERADOR — Investigador' });
+          await updateAnalysis(analysis.id, { currentAgent: 'basile' });
 
           const basilePrompt = getBasilePrompt(missionLiteral, corpusText, caseData?.cutoffDate ?? undefined);
           const basileRaw = await callLLM({ provider: providerKey, system: basilePrompt.system, user: basilePrompt.user, model, json: true, label: 'BASILE' });
           const basileResult = parseJSON(basileRaw);
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { basileResult } });
-          sendEvent({ status: 'agent_complete', agent: 'basile', label: 'BASILE — Investigador' });
+          await updateAnalysis(analysis.id, { basileResult });
+          sendEvent({ status: 'agent_complete', agent: 'basile', label: 'OPERADOR — Investigador' });
 
           if (mode === 'SOMENTE_BASILE') {
-            await prisma.analysis.update({
-              where: { id: analysis.id },
-              data: { status: 'CONCLUIDO', completedAt: new Date(), exitCode: 0, currentAgent: null },
-            });
+            await updateAnalysis(analysis.id, { status: 'CONCLUIDO', completedAt: new Date(), exitCode: 0, currentAgent: null });
             sendEvent({ status: 'completed', analysisId: analysis.id });
             controller.close();
             return;
@@ -126,65 +128,59 @@ export async function POST(request: NextRequest) {
 
           // AGENT 2: ADVOGADO DO DIABO
           sendEvent({ status: 'agent_start', agent: 'advocado', label: 'ADVOGADO DO DIABO — Contraditório' });
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'advocado' } });
+          await updateAnalysis(analysis.id, { currentAgent: 'advocado' });
 
           const advPrompt = getAdvogadoPrompt(basileRaw, corpusText);
           const advRaw = await callLLM({ provider: providerKey, system: advPrompt.system, user: advPrompt.user, model, json: true, label: 'ADVOGADO DO DIABO' });
           const advocadoResult = parseJSON(advRaw);
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { advocadoResult } });
+          await updateAnalysis(analysis.id, { advocadoResult });
           sendEvent({ status: 'agent_complete', agent: 'advocado', label: 'ADVOGADO DO DIABO' });
 
           // AGENT 3: CABEÇA DO JUIZ
           sendEvent({ status: 'agent_start', agent: 'cabeca', label: 'CABEÇA DO JUIZ — Perspectiva Judicial' });
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'cabeca' } });
+          await updateAnalysis(analysis.id, { currentAgent: 'cabeca' });
 
           const cabPrompt = getCabecaPrompt(basileRaw, advRaw, corpusText);
           const cabRaw = await callLLM({ provider: providerKey, system: cabPrompt.system, user: cabPrompt.user, model, json: true, label: 'CABEÇA DO JUIZ' });
           const cabecaResult = parseJSON(cabRaw);
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { cabecaResult } });
+          await updateAnalysis(analysis.id, { cabecaResult });
           sendEvent({ status: 'agent_complete', agent: 'cabeca', label: 'CABEÇA DO JUIZ' });
 
           // AGENT 4: AUDITOR DOCUMENTAL
           sendEvent({ status: 'agent_start', agent: 'auditor', label: 'AUDITOR DOCUMENTAL — Integridade' });
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'auditor' } });
+          await updateAnalysis(analysis.id, { currentAgent: 'auditor' });
 
           const audPrompt = getAuditorPrompt(basileRaw, advRaw, cabRaw);
           const audRaw = await callLLM({ provider: providerKey, system: audPrompt.system, user: audPrompt.user, model, json: true, label: 'AUDITOR DOCUMENTAL' });
           const auditorResult = parseJSON(audRaw);
           const icpScore = auditorResult?.icp_basile?.total ?? null;
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { auditorResult, icpScore } });
+          await updateAnalysis(analysis.id, { auditorResult, icpScore });
           sendEvent({ status: 'agent_complete', agent: 'auditor', label: 'AUDITOR DOCUMENTAL', icpScore });
 
           // AGENT 5: MESTRE
           sendEvent({ status: 'agent_start', agent: 'mestre', label: 'MESTRE — Síntese Estratégica' });
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'mestre' } });
+          await updateAnalysis(analysis.id, { currentAgent: 'mestre' });
 
           const mesPrompt = getMestrePrompt(basileRaw, advRaw, cabRaw, audRaw);
           const mesRaw = await callLLM({ provider: providerKey, system: mesPrompt.system, user: mesPrompt.user, model, json: true, label: 'MESTRE' });
           const mestreResult = parseJSON(mesRaw);
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { mestreResult } });
+          await updateAnalysis(analysis.id, { mestreResult });
           sendEvent({ status: 'agent_complete', agent: 'mestre', label: 'MESTRE' });
 
           // AGENT 6: ORIENTAÇÕES — Revisor Independente
           sendEvent({ status: 'agent_start', agent: 'orientacoes', label: 'ORIENTADOR — Revisor Independente' });
-          await prisma.analysis.update({ where: { id: analysis.id }, data: { currentAgent: 'orientacoes' } });
+          await updateAnalysis(analysis.id, { currentAgent: 'orientacoes' });
 
           const oriPrompt = getOrientacoesPrompt(missionLiteral, corpusText, basileRaw, advRaw, cabRaw, audRaw, mesRaw);
           const oriRaw = await callLLM({ provider: providerKey, system: oriPrompt.system, user: oriPrompt.user, model, json: true, label: 'ORIENTADOR' });
           const orientacoesResult = parseJSON(oriRaw);
-          await prisma.analysis.update({
-            where: { id: analysis.id },
-            data: { orientacoesResult, status: 'CONCLUIDO', completedAt: new Date(), exitCode: 0, currentAgent: null },
-          });
+          await updateAnalysis(analysis.id, { orientacoesResult, status: 'CONCLUIDO', completedAt: new Date(), exitCode: 0, currentAgent: null });
           sendEvent({ status: 'agent_complete', agent: 'orientacoes', label: 'ORIENTADOR — Revisor Independente' });
 
           sendEvent({ status: 'completed', analysisId: analysis.id, icpScore });
         } catch (err: any) {
           console.error('Analysis pipeline error:', err);
-          await prisma.analysis.update({
-            where: { id: analysis.id },
-            data: { status: 'ERRO', exitCode: 10, errorDetail: String(err?.message ?? err), currentAgent: null },
-          });
+          await updateAnalysis(analysis.id, { status: 'ERRO', exitCode: 10, errorDetail: String(err?.message ?? err), currentAgent: null });
           sendEvent({ status: 'error', message: String(err?.message ?? 'Erro desconhecido') });
         } finally {
           try { controller.close(); } catch { /* already closed */ }

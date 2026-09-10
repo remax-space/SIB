@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { FadeIn } from '@/components/ui/animate'
 import { Upload, X, Play, AlertTriangle, Copy, Check, Loader2 } from 'lucide-react'
 import { SIB_VERSION } from '@/lib/constants'
+import { formatAgentOutput } from '@/lib/format-agent-output'
 
 const MISSION_DEFAULT = 'Investigue, audite e conclua este PDF pelo Método Basile: fatos, provas, cronologia, contradições, lacunas, tese, contratese, riscos e resistência judicial. Ao final, indique objetivamente a melhor conduta do operador, sem inventar dados e sem usar memória como prova.'
 
@@ -231,16 +232,16 @@ export function DashboardClient() {
                   const aData = await aRes.json()
                   
                   if (event.agent === 'basile' && aData.basileResult) {
-                    setBasile({ status: 'done', content: formatAgentOutput(aData.basileResult), raw: aData.basileResult })
+                    setBasile({ status: 'done', content: formatAgentOutput(aData.basileResult, 'basile'), raw: aData.basileResult })
                   }
                   if (event.agent === 'advocado' && aData.advocadoResult) {
-                    setAdvogado({ status: 'done', content: formatAgentOutput(aData.advocadoResult), raw: aData.advocadoResult })
+                    setAdvogado({ status: 'done', content: formatAgentOutput(aData.advocadoResult, 'advocado'), raw: aData.advocadoResult })
                   }
                   if (event.agent === 'cabeca' && aData.cabecaResult) {
-                    setCabeca({ status: 'done', content: formatAgentOutput(aData.cabecaResult), raw: aData.cabecaResult })
+                    setCabeca({ status: 'done', content: formatAgentOutput(aData.cabecaResult, 'cabeca'), raw: aData.cabecaResult })
                   }
                   if (event.agent === 'mestre' && aData.mestreResult) {
-                    setMestre({ status: 'done', content: formatAgentOutput(aData.mestreResult), raw: aData.mestreResult })
+                    setMestre({ status: 'done', content: formatAgentOutput(aData.mestreResult, 'mestre'), raw: aData.mestreResult })
                   }
                 }
               }
@@ -263,17 +264,6 @@ export function DashboardClient() {
     }
   }
 
-  function formatAgentOutput(data: any): string {
-    if (!data) return ''
-    if (typeof data === 'string') return data
-    if (data.raw_text) return data.raw_text
-    try {
-      return JSON.stringify(data, null, 2)
-    } catch {
-      return String(data)
-    }
-  }
-
   function getAgentStatusLabel(status: AgentResult['status']): string {
     switch (status) {
       case 'waiting': return 'AGUARDANDO RODADA'
@@ -286,9 +276,9 @@ export function DashboardClient() {
   function getAgentStatusColor(status: AgentResult['status']): string {
     switch (status) {
       case 'waiting': return 'text-muted-foreground'
-      case 'running': return 'text-cyan-400'
-      case 'done': return 'text-emerald-400'
-      case 'error': return 'text-red-400'
+      case 'running': return 'text-info'
+      case 'done': return 'text-success'
+      case 'error': return 'text-destructive'
     }
   }
 
@@ -300,8 +290,8 @@ export function DashboardClient() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
             SISTEMA INTELIGÊNCIA JURÍDICA BASILE
           </h1>
-          <p className="text-sm text-cyan-400 mt-1">
-            Fluxo direto: processo + PDF/corpus + missão → Dr. Basile → Advogado do Diabo → Cabeça do Juiz → MESTRE.
+          <p className="text-sm text-info mt-1">
+            Fluxo direto: processo + PDF/corpus + missão → Operador → Advogado do Diabo → Cabeça do Juiz → MESTRE.
           </p>
         </div>
       </FadeIn>
@@ -321,7 +311,7 @@ export function DashboardClient() {
                 disabled={isRunning}
               />
               <p className="text-xs mt-1 text-muted-foreground">
-                CASO: <span className={caseStatus === 'ATIVO' ? 'text-emerald-400' : 'text-muted-foreground'}>{caseStatus}</span>
+                CASO: <span className={caseStatus === 'ATIVO' ? 'text-success' : 'text-muted-foreground'}>{caseStatus}</span>
               </p>
             </div>
             <div>
@@ -333,7 +323,7 @@ export function DashboardClient() {
                 className="text-sm bg-input border-border cursor-default"
               />
               <p className="text-xs mt-1 text-muted-foreground">
-                CORPUS: <span className={corpusStatus === 'SEM ARQUIVO' ? 'text-muted-foreground' : 'text-emerald-400'}>{corpusStatus}</span>
+                CORPUS: <span className={corpusStatus === 'SEM ARQUIVO' ? 'text-muted-foreground' : 'text-success'}>{corpusStatus}</span>
               </p>
               <input
                 ref={fileInputRef}
@@ -347,7 +337,7 @@ export function DashboardClient() {
               <Button
                 onClick={handleAddPdf}
                 disabled={isRunning}
-                className="bg-[#16304f] text-slate-100 hover:bg-[#1c3b60] border border-[#24456b] font-bold text-xs tracking-wide"
+                className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide"
               >
                 <Upload className="w-3.5 h-3.5 mr-1.5" />
                 ADICIONAR PDF
@@ -355,7 +345,7 @@ export function DashboardClient() {
               <Button
                 onClick={handleClearFields}
                 disabled={isRunning}
-                className="bg-[#16304f] text-slate-100 hover:bg-[#1c3b60] border border-[#24456b] font-bold text-xs tracking-wide"
+                className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide"
               >
                 <X className="w-3.5 h-3.5 mr-1.5" />
                 LIMPAR CAMPOS
@@ -380,7 +370,7 @@ export function DashboardClient() {
             </div>
             <div className="flex items-end h-full pb-1">
               <p className="text-xs text-muted-foreground">
-                CLIENTE/CAIXA: <span className={clientStatus === 'PENDENTE' ? 'text-muted-foreground' : 'text-emerald-400'}>{clientStatus}</span>
+                CLIENTE/CAIXA: <span className={clientStatus === 'PENDENTE' ? 'text-muted-foreground' : 'text-success'}>{clientStatus}</span>
                 {clientStatus === 'PENDENTE' && <span className="text-muted-foreground"> — após adicionar o PDF, informe o cliente e pressione ENTER.</span>}
               </p>
             </div>
@@ -402,7 +392,7 @@ export function DashboardClient() {
                   onClick={handleExecutarRodada}
                   disabled={isRunning}
                   size="lg"
-                  className="bg-[#16304f] text-slate-100 hover:bg-[#1c3b60] border border-[#24456b] font-bold text-sm tracking-wide h-full min-h-[80px] px-8"
+                  className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-sm tracking-wide h-full min-h-[80px] px-8"
                 >
                   {isRunning ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" />EXECUTANDO...</>
@@ -431,7 +421,7 @@ export function DashboardClient() {
             <div className="flex items-end">
               <Button
                 onClick={() => checkPendencias()}
-                className="bg-[#16304f] text-slate-100 hover:bg-[#1c3b60] border border-[#24456b] font-bold text-xs tracking-wide h-[60px] px-6"
+                className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide h-[60px] px-6"
               >
                 <AlertTriangle className="w-4 h-4 mr-2" />
                 PENDÊNCIAS ACIMA
@@ -441,9 +431,9 @@ export function DashboardClient() {
 
           {/* Pendencias Alert */}
           {pendencias.length > 0 && (
-            <div className="bg-[#16304f]/40 border border-[#24456b] rounded-lg p-3">
-              <p className="text-xs font-bold text-slate-100 mb-1">PENDÊNCIAS IDENTIFICADAS:</p>
-              <ul className="text-xs text-slate-300 space-y-0.5">
+            <div className="bg-nav/40 border border-nav-border rounded-lg p-3">
+              <p className="text-xs font-bold text-nav-foreground mb-1">PENDÊNCIAS IDENTIFICADAS:</p>
+              <ul className="text-xs text-muted-foreground space-y-0.5">
                 {pendencias.map((p, i) => (
                   <li key={i}>• {p}</li>
                 ))}
@@ -459,9 +449,9 @@ export function DashboardClient() {
           6. RESULTADOS DA RODADA — TRÊS ANÁLISES INDEPENDENTES
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* DR. BASILE */}
+          {/* OPERADOR */}
           <AgentCard
-            title="DR. BASILE"
+            title="OPERADOR"
             agent={basile}
             onCopy={() => handleCopy('basile', basile.content)}
             copied={copiedAgent === 'basile'}
@@ -497,12 +487,9 @@ export function DashboardClient() {
               {mestre.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
               {getAgentStatusLabel(mestre.status)}
             </p>
-            <Textarea
-              value={mestre.content}
-              readOnly
-              className="text-xs bg-input border-border min-h-[200px] font-mono resize-y"
-              placeholder="Aguardando conclusão do MESTRE..."
-            />
+            <div className="text-sm bg-input border border-border rounded-md min-h-[200px] max-h-[420px] overflow-y-auto p-3 whitespace-pre-wrap leading-relaxed">
+              {mestre.content || <span className="text-muted-foreground">Aguardando conclusão do MESTRE...</span>}
+            </div>
             <div className="flex justify-end mt-2">
               <Button
                 variant="outline"
@@ -540,15 +527,15 @@ function AgentCard({ title, agent, onCopy, copied }: {
   const statusColor = (() => {
     switch (agent.status) {
       case 'waiting': return 'text-muted-foreground'
-      case 'running': return 'text-cyan-400'
-      case 'done': return 'text-emerald-400'
-      case 'error': return 'text-red-400'
+      case 'running': return 'text-info'
+      case 'done': return 'text-success'
+      case 'error': return 'text-destructive'
     }
   })()
 
   return (
     <Card className="border-border/50">
-      <div className="bg-[#1a3050] px-4 py-2">
+      <div className="bg-surface-2 px-4 py-2">
         <h3 className="text-sm font-bold text-foreground">{title}</h3>
       </div>
       <CardContent className="p-4">
@@ -556,12 +543,9 @@ function AgentCard({ title, agent, onCopy, copied }: {
           {agent.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
           {statusLabel}
         </p>
-        <Textarea
-          value={agent.content}
-          readOnly
-          className="text-xs bg-input border-border min-h-[150px] font-mono resize-y"
-          placeholder=""
-        />
+        <div className="text-sm bg-input border border-border rounded-md min-h-[150px] max-h-[320px] overflow-y-auto p-3 whitespace-pre-wrap leading-relaxed">
+          {agent.content || <span className="text-muted-foreground"> </span>}
+        </div>
         <div className="flex justify-center mt-2">
           <Button
             variant="outline"

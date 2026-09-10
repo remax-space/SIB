@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { getSetting, setSetting } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth-helpers';
 
 // Chaves de configuração do gate de Jurisprudência guardadas na tabela Setting (key/value)
@@ -9,19 +9,6 @@ const K_PROVIDER = 'jurisprudencia_provider';
 const K_API_KEY = 'jurisprudencia_api_key';
 const K_ENDPOINT = 'jurisprudencia_endpoint';
 const K_ENABLED = 'jurisprudencia_enabled';
-
-async function getSetting(key: string): Promise<string> {
-  const s = await prisma.setting.findUnique({ where: { key } });
-  return s?.value ?? '';
-}
-
-async function setSetting(key: string, value: string): Promise<void> {
-  await prisma.setting.upsert({
-    where: { key },
-    update: { value },
-    create: { key, value },
-  });
-}
 
 export async function GET() {
   const gate = await requireAdmin(); if (gate instanceof NextResponse) return gate;

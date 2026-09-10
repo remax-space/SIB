@@ -34,10 +34,10 @@ export function TriagemClient() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'LIDO_INTEGRALMENTE': return <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-      case 'LIDO_PARCIALMENTE': return <Eye className="w-3.5 h-3.5 text-blue-400" />
-      case 'ILEGIVEL': return <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-      default: return <Clock className="w-3.5 h-3.5 text-yellow-400" />
+      case 'LIDO_INTEGRALMENTE': return <CheckCircle className="w-3.5 h-3.5 text-success" />
+      case 'LIDO_PARCIALMENTE': return <Eye className="w-3.5 h-3.5 text-info" />
+      case 'ILEGIVEL': return <AlertCircle className="w-3.5 h-3.5 text-destructive" />
+      default: return <Clock className="w-3.5 h-3.5 text-warning" />
     }
   }
 

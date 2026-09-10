@@ -7,6 +7,7 @@ import { getDeviceFingerprint } from '@/lib/fingerprint'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader2, KeyRound, ShieldCheck, Lock } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 type Mode = 'machine' | 'admin'
 
@@ -66,29 +67,32 @@ export function LoginClient() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0D0F14] px-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <div className="relative w-20 h-20 mb-4">
             <Image src="/sib-logo.png" alt="SIB" fill className="object-contain" priority />
           </div>
-          <h1 className="text-xl font-bold text-slate-100 tracking-wide">SIB</h1>
+          <h1 className="text-xl font-bold text-foreground tracking-wide">SIB</h1>
           <p className="text-xs text-muted-foreground mt-1">Sistema de Inteligência Basile</p>
         </div>
 
-        <div className="bg-[#1E2330] border border-[#24456b] rounded-xl p-6 shadow-2xl">
+        <div className="bg-card border border-nav-border rounded-xl p-6 shadow-lg">
           <div className="flex gap-2 mb-6">
             <button
               type="button"
               onClick={() => { setMode('machine'); setError('') }}
-              className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-lg border transition-colors ${mode === 'machine' ? 'bg-[#16304f] text-slate-100 border-[#24456b]' : 'bg-transparent text-muted-foreground border-transparent hover:text-slate-300'}`}
+              className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-lg border transition-colors ${mode === 'machine' ? 'bg-nav text-nav-foreground border-nav-border' : 'bg-transparent text-muted-foreground border-transparent hover:text-foreground'}`}
             >
               <KeyRound className="w-3.5 h-3.5" /> LICENÇA
             </button>
             <button
               type="button"
               onClick={() => { setMode('admin'); setError('') }}
-              className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-lg border transition-colors ${mode === 'admin' ? 'bg-[#16304f] text-slate-100 border-[#24456b]' : 'bg-transparent text-muted-foreground border-transparent hover:text-slate-300'}`}
+              className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-lg border transition-colors ${mode === 'admin' ? 'bg-nav text-nav-foreground border-nav-border' : 'bg-transparent text-muted-foreground border-transparent hover:text-foreground'}`}
             >
               <ShieldCheck className="w-3.5 h-3.5" /> ACESSO MESTRE
             </button>
@@ -97,7 +101,7 @@ export function LoginClient() {
           {mode === 'machine' ? (
             <form onSubmit={handleMachine} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-300 tracking-wide mb-1.5 block">
+                <label className="text-xs font-bold text-foreground/80 tracking-wide mb-1.5 block">
                   CHAVE DE LICENÇA DA MÁQUINA
                 </label>
                 <Input
@@ -112,15 +116,15 @@ export function LoginClient() {
                   A licença trava nesta máquina no primeiro acesso. Não funcionará em outro computador.
                 </p>
               </div>
-              {error && <p className="text-xs text-red-400">{error}</p>}
-              <Button type="submit" disabled={loading} className="w-full bg-[#16304f] text-slate-100 hover:bg-[#1c3b60] border border-[#24456b] font-bold text-xs tracking-wide">
+              {error && <p className="text-xs text-destructive">{error}</p>}
+              <Button type="submit" disabled={loading} className="w-full bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide">
                 {loading ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />VALIDANDO...</> : <><Lock className="w-3.5 h-3.5 mr-2" />ACESSAR SISTEMA</>}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleAdmin} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-300 tracking-wide mb-1.5 block">E-MAIL DO OPERADOR</label>
+                <label className="text-xs font-bold text-foreground/80 tracking-wide mb-1.5 block">E-MAIL DO OPERADOR</label>
                 <Input
                   type="email"
                   value={email}
@@ -132,7 +136,7 @@ export function LoginClient() {
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-300 tracking-wide mb-1.5 block">SENHA MESTRE</label>
+                <label className="text-xs font-bold text-foreground/80 tracking-wide mb-1.5 block">SENHA MESTRE</label>
                 <Input
                   type="password"
                   value={password}
@@ -143,8 +147,8 @@ export function LoginClient() {
                   required
                 />
               </div>
-              {error && <p className="text-xs text-red-400">{error}</p>}
-              <Button type="submit" disabled={loading} className="w-full bg-[#16304f] text-slate-100 hover:bg-[#1c3b60] border border-[#24456b] font-bold text-xs tracking-wide">
+              {error && <p className="text-xs text-destructive">{error}</p>}
+              <Button type="submit" disabled={loading} className="w-full bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide">
                 {loading ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />ENTRANDO...</> : <><ShieldCheck className="w-3.5 h-3.5 mr-2" />ENTRAR COMO MESTRE</>}
               </Button>
             </form>

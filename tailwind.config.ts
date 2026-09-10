@@ -65,6 +65,43 @@ const config: Config = {
           '4': 'hsl(var(--chart-4))',
           '5': 'hsl(var(--chart-5))',
         },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))',
+        },
+        nav: {
+          DEFAULT: 'hsl(var(--nav))',
+          hover: 'hsl(var(--nav-hover))',
+          foreground: 'hsl(var(--nav-foreground))',
+          active: 'hsl(var(--nav-active))',
+          'active-foreground': 'hsl(var(--nav-active-foreground))',
+          border: 'hsl(var(--nav-border))',
+        },
+        surface: {
+          DEFAULT: 'hsl(var(--surface))',
+          2: 'hsl(var(--surface-2))',
+        },
+        field: 'hsl(var(--field))',
+        overlay: 'hsl(var(--overlay))',
+        'danger-surface': {
+          DEFAULT: 'hsl(var(--danger-surface))',
+          hover: 'hsl(var(--danger-surface-hover))',
+          border: 'hsl(var(--danger-surface-border))',
+          foreground: 'hsl(var(--danger-surface-foreground))',
+        },
+      },
+      boxShadow: {
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        lg: 'var(--shadow-lg)',
       },
       keyframes: {
         'accordion-down': {

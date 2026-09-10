@@ -1,21 +1,93 @@
 'use client'
 
-import { Moon, Sun } from 'lucide-react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useMounted } from '@/components/client-only'
+import { applyTheme, type SibTheme } from '@/lib/theme'
+import { cn } from '@/lib/utils'
 
-export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+const OPTIONS: { value: SibTheme; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Claro', icon: Sun },
+  { value: 'dark', label: 'Escuro', icon: Moon },
+  { value: 'system', label: 'Sistema', icon: Monitor },
+]
+
+function ThemeIcon({ resolved }: { resolved?: string }) {
+  return (
+    <span className="relative flex h-4 w-4 items-center justify-center">
+      <Sun
+        className={cn(
+          'absolute h-4 w-4 transition-all duration-300',
+          resolved === 'dark' ? 'rotate-90 scale-0 opacity-0' : 'rotate-0 scale-100 opacity-100'
+        )}
+      />
+      <Moon
+        className={cn(
+          'absolute h-4 w-4 transition-all duration-300',
+          resolved === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'
+        )}
+      />
+    </span>
+  )
+}
+
+export function ThemeToggle({ className }: { className?: string }) {
+  const mounted = useMounted()
+  const { theme, setTheme, resolvedTheme, systemTheme } = useTheme()
+
+  const resolvedLabel =
+    theme === 'system'
+      ? `Sistema — ${systemTheme === 'dark' || resolvedTheme === 'dark' ? 'escuro' : 'claro'} agora`
+      : theme === 'light'
+        ? 'Tema claro'
+        : 'Tema escuro'
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-    >
-      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-      <span className="sr-only">Toggle theme</span>
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={cn('shrink-0', className)}
+          aria-label={mounted ? resolvedLabel : 'Alternar tema'}
+          title={mounted ? resolvedLabel : 'Alternar tema'}
+        >
+          <ThemeIcon resolved={mounted ? resolvedTheme : undefined} />
+          <span className="sr-only">Alternar tema</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        {OPTIONS.map(({ value, label, icon: Icon }) => {
+          const active = mounted && theme === value
+          const hint =
+            value === 'system' && mounted
+              ? resolvedTheme === 'dark'
+                ? 'escuro agora'
+                : 'claro agora'
+              : null
+          return (
+            <DropdownMenuItem
+              key={value}
+              onClick={(event) => applyTheme(value, setTheme, event)}
+              className={cn('gap-2', active && 'bg-accent')}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="flex-1">{label}</span>
+              {hint && (
+                <span className="text-[10px] text-muted-foreground">{hint}</span>
+              )}
+              {active && <span className="text-primary text-[10px] font-semibold">●</span>}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

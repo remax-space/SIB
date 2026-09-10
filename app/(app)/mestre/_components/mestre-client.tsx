@@ -25,7 +25,7 @@ export function MestreClient() {
     <div className="space-y-6">
       <PageHeader
         title="MESTRE — Sínteses Estratégicas"
-        description="Conclusões finais do MESTRE após auditoria da tríade (Basile + Advogado do Diabo + Cabeça do Juiz)"
+        description="Conclusões finais do MESTRE após auditoria da tríade (Operador + Advogado do Diabo + Cabeça do Juiz)"
         actions={
           <LimparButton
             confirmMessage="Deseja limpar a lista exibida nesta janela?"

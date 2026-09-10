@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react'
 import { LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SIB_VERSION } from '@/lib/constants'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const navSections = [
   {
@@ -47,7 +48,7 @@ export function Sidebar({ role }: { role?: string }) {
       {/* Logo */}
       <div className="mb-6 flex flex-col items-center">
         <Link href="/" className="flex flex-col items-center gap-2">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden border border-primary/40 shadow-lg shadow-black/40">
+          <div className="w-24 h-24 rounded-2xl overflow-hidden border border-primary/40 shadow-lg">
             <Image
               src="/sib-logo.png"
               alt="SIB — Sistema Inteligência Jurídica Basile"
@@ -75,8 +76,8 @@ export function Sidebar({ role }: { role?: string }) {
                   className={cn(
                     'block px-4 py-2.5 rounded-md text-[13px] font-semibold tracking-wide transition-all duration-150',
                     isActive
-                      ? 'bg-slate-100 text-[#12233d] shadow-sm'
-                      : 'bg-[#16304f] text-slate-100 hover:bg-[#1c3b60]'
+                      ? 'bg-nav-active text-nav-active-foreground shadow-sm'
+                      : 'bg-nav text-nav-foreground hover:bg-nav-hover'
                   )}
                 >
                   {item.label}
@@ -97,8 +98,8 @@ export function Sidebar({ role }: { role?: string }) {
                   className={cn(
                     'block px-4 py-2.5 rounded-md text-[13px] font-semibold tracking-wide transition-all duration-150',
                     isActive
-                      ? 'bg-slate-100 text-[#12233d] shadow-sm'
-                      : 'bg-[#16304f] text-slate-100 hover:bg-[#1c3b60]'
+                      ? 'bg-nav-active text-nav-active-foreground shadow-sm'
+                      : 'bg-nav text-nav-foreground hover:bg-nav-hover'
                   )}
                 >
                   {item.label}
@@ -111,9 +112,13 @@ export function Sidebar({ role }: { role?: string }) {
 
       {/* Footer */}
       <div className="mt-auto pt-3 border-t border-border/50">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Aparência</span>
+          <ThemeToggle />
+        </div>
         <button
           onClick={() => signOut({ redirectTo: '/login' })}
-          className="w-full flex items-center gap-2 px-4 py-2.5 rounded-md text-[13px] font-semibold tracking-wide bg-[#3a1620] text-slate-100 hover:bg-[#4a1c28] border border-[#5a2230] transition-colors mb-3"
+          className="w-full flex items-center gap-2 px-4 py-2.5 rounded-md text-[13px] font-semibold tracking-wide bg-danger-surface text-danger-surface-foreground hover:bg-danger-surface-hover border border-danger-surface-border transition-colors mb-3"
         >
           <LogOut className="w-3.5 h-3.5" /> SAIR
         </button>

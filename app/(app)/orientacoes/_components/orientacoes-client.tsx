@@ -46,18 +46,18 @@ function concordLabel(c?: string) {
 }
 
 function concordColor(c?: string) {
-  return c === 'CONCORDA_TOTALMENTE' ? 'text-emerald-400'
-    : c === 'CONCORDA_COM_RESSALVAS' ? 'text-yellow-400'
-    : c === 'DISCORDA_PARCIALMENTE' ? 'text-orange-400'
-    : c === 'DISCORDA_TOTALMENTE' ? 'text-red-400'
+  return c === 'CONCORDA_TOTALMENTE' ? 'text-success'
+    : c === 'CONCORDA_COM_RESSALVAS' ? 'text-warning'
+    : c === 'DISCORDA_PARCIALMENTE' ? 'text-warning'
+    : c === 'DISCORDA_TOTALMENTE' ? 'text-destructive'
     : 'text-muted-foreground'
 }
 
 function gravColor(g?: string) {
-  return g === 'CRITICA' ? 'bg-red-600/25 text-red-300'
-    : g === 'ALTA' ? 'bg-red-500/20 text-red-400'
-    : g === 'MEDIA' ? 'bg-yellow-500/20 text-yellow-400'
-    : 'bg-blue-500/20 text-blue-400'
+  return g === 'CRITICA' ? 'bg-destructive/25 text-destructive'
+    : g === 'ALTA' ? 'bg-destructive/20 text-destructive'
+    : g === 'MEDIA' ? 'bg-warning/20 text-warning'
+    : 'bg-info/20 text-info'
 }
 
 export function OrientacoesClient() {
@@ -149,12 +149,12 @@ export function OrientacoesClient() {
                           {e?.onde && <span className="text-[11px] text-muted-foreground">Onde: {e.onde}</span>}
                         </div>
                         <p className="text-xs">{e?.descricao ?? '—'}</p>
-                        {e?.correcao && <p className="text-[11px] text-emerald-400 mt-1">Correção: {e.correcao}</p>}
+                        {e?.correcao && <p className="text-[11px] text-success mt-1">Correção: {e.correcao}</p>}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-emerald-400">Nenhum erro de análise jurídica detectado.</p>
+                  <p className="text-xs text-success">Nenhum erro de análise jurídica detectado.</p>
                 )}
 
                 {ori?.recomendacao_final && (

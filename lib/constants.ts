@@ -39,24 +39,24 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 export const CASE_STATUSES = [
-  { value: 'ATIVO', label: 'Ativo', color: 'bg-emerald-500/20 text-emerald-400' },
-  { value: 'SUSPENSO', label: 'Suspenso', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'ENCERRADO', label: 'Encerrado', color: 'bg-gray-500/20 text-gray-400' },
-  { value: 'ARQUIVADO', label: 'Arquivado', color: 'bg-red-500/20 text-red-400' },
+  { value: 'ATIVO', label: 'Ativo', color: 'bg-success/15 text-success' },
+  { value: 'SUSPENSO', label: 'Suspenso', color: 'bg-warning/15 text-warning' },
+  { value: 'ENCERRADO', label: 'Encerrado', color: 'bg-muted text-muted-foreground' },
+  { value: 'ARQUIVADO', label: 'Arquivado', color: 'bg-destructive/15 text-destructive' },
 ] as const;
 
 export const READ_STATUSES = [
-  { value: 'PENDENTE', label: 'Pendente', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'LIDO_INTEGRALMENTE', label: 'Lido Integralmente', color: 'bg-emerald-500/20 text-emerald-400' },
-  { value: 'LIDO_PARCIALMENTE', label: 'Lido Parcialmente', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'ILEGIVEL', label: 'Ilegível/Incompleto', color: 'bg-red-500/20 text-red-400' },
+  { value: 'PENDENTE', label: 'Pendente', color: 'bg-warning/15 text-warning' },
+  { value: 'LIDO_INTEGRALMENTE', label: 'Lido Integralmente', color: 'bg-success/15 text-success' },
+  { value: 'LIDO_PARCIALMENTE', label: 'Lido Parcialmente', color: 'bg-info/15 text-info' },
+  { value: 'ILEGIVEL', label: 'Ilegível/Incompleto', color: 'bg-destructive/15 text-destructive' },
 ] as const;
 
 export const ANALYSIS_STATUSES = [
-  { value: 'PENDENTE', label: 'Pendente', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'EM_ANDAMENTO', label: 'Em Andamento', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'CONCLUIDO', label: 'Concluído', color: 'bg-emerald-500/20 text-emerald-400' },
-  { value: 'ERRO', label: 'Erro', color: 'bg-red-500/20 text-red-400' },
+  { value: 'PENDENTE', label: 'Pendente', color: 'bg-warning/15 text-warning' },
+  { value: 'EM_ANDAMENTO', label: 'Em Andamento', color: 'bg-info/15 text-info' },
+  { value: 'CONCLUIDO', label: 'Concluído', color: 'bg-success/15 text-success' },
+  { value: 'ERRO', label: 'Erro', color: 'bg-destructive/15 text-destructive' },
 ] as const;
 
 export const PROVIDER_MODELS: Record<string, { label: string; model: string; icon: string; envVar: string }> = {
@@ -66,7 +66,7 @@ export const PROVIDER_MODELS: Record<string, { label: string; model: string; ico
 };
 
 export const AGENTS = [
-  { key: 'basile', label: 'BASILE', subtitle: 'Investigador', icon: '🔍' },
+  { key: 'basile', label: 'OPERADOR', subtitle: 'Investigador', icon: '🔍' },
   { key: 'advocado', label: 'ADVOGADO DO DIABO', subtitle: 'Contraditório', icon: '⚔️' },
   { key: 'cabeca', label: 'CABEÇA DO JUIZ', subtitle: 'Perspectiva Judicial', icon: '⚖️' },
   { key: 'auditor', label: 'AUDITOR DOCUMENTAL', subtitle: 'Integridade', icon: '📋' },

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { createLicense, findLicenseByKey, listLicenses } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth-helpers';
 import crypto from 'crypto';
 
@@ -15,7 +15,7 @@ function genKey(): string {
 export async function GET() {
   const gate = await requireAdmin(); if (gate instanceof NextResponse) return gate;
   try {
-    const licenses = await prisma.license.findMany({ orderBy: { createdAt: 'desc' } });
+    const licenses = await listLicenses();
     return NextResponse.json({ licenses });
   } catch (e) {
     return NextResponse.json({ error: 'Erro ao listar licenças' }, { status: 500 });
@@ -29,17 +29,14 @@ export async function POST(request: NextRequest) {
     const label = String(body?.label ?? '').trim() || 'Máquina sem nome';
     const notes = body?.notes ? String(body.notes).trim() : null;
 
-    // Garante chave única
     let key = genKey();
     for (let i = 0; i < 5; i++) {
-      const exists = await prisma.license.findUnique({ where: { key } });
+      const exists = await findLicenseByKey(key);
       if (!exists) break;
       key = genKey();
     }
 
-    const license = await prisma.license.create({
-      data: { key, label, notes },
-    });
+    const license = await createLicense({ key, label, notes });
     return NextResponse.json({ license });
   } catch (e) {
     return NextResponse.json({ error: 'Erro ao criar licença' }, { status: 500 });

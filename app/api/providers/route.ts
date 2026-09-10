@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { listProviderConfigs, upsertProviderConfig } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth-helpers'
 import { getProviderModel, listEnvProviders } from '@/lib/llm'
 
@@ -9,14 +9,14 @@ export async function GET() {
   const gate = await requireAdmin()
   if (gate instanceof NextResponse) return gate
   try {
-    const stored = await prisma.providerConfig.findMany()
+    const stored = await listProviderConfigs()
     const fromEnv = listEnvProviders()
     return NextResponse.json(
       fromEnv.map((item) => {
         const row = stored.find((p) => p.provider === item.provider)
         return {
           ...item,
-          model: row?.model?.trim() || item.model,
+          model: String(row?.model ?? '').trim() || item.model,
           apiKey: item.hasKey ? '•••• via .env' : '',
         }
       })
@@ -38,18 +38,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Provider obrigatório' }, { status: 400 })
     }
 
-    const updated = await prisma.providerConfig.upsert({
-      where: { provider },
-      update: {
-        ...(model !== undefined ? { model } : {}),
-        ...(enabled !== undefined ? { enabled } : {}),
-      },
-      create: {
-        provider,
-        apiKey: '',
-        model: model ?? getProviderModel(provider),
-        enabled: enabled ?? true,
-      },
+    const updated = await upsertProviderConfig({
+      provider,
+      ...(model !== undefined ? { model } : {}),
+      ...(enabled !== undefined ? { enabled } : {}),
     })
 
     return NextResponse.json({

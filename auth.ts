@@ -2,7 +2,7 @@ import { config as loadEnv } from 'dotenv'
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
-import { prisma } from '@/lib/db'
+import { findLicenseByKey, findUserByEmail, updateLicense } from '@/lib/db'
 
 loadEnv()
 
@@ -36,7 +36,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const email = String(credentials?.email ?? '').trim().toLowerCase()
           const password = String(credentials?.password ?? '')
           if (!email || !password) return null
-          const user = await prisma.user.findUnique({ where: { email } })
+          const user = await findUserByEmail(email)
           if (!user) return null
           const ok = await bcrypt.compare(password, user.password)
           if (!ok) return null
@@ -54,28 +54,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const fingerprint = String(credentials?.fingerprint ?? '').trim()
           if (!key || !fingerprint) return null
 
-          const license = await prisma.license.findUnique({ where: { key } })
+          const license = await findLicenseByKey(key)
           if (!license) return null
           if (license.revoked || !license.active) return null
 
           if (!license.fingerprint) {
             // Primeira ativação: trava nesta máquina.
-            await prisma.license.update({
-              where: { id: license.id },
-              data: {
-                fingerprint,
-                activatedAt: new Date(),
-                lastSeenAt: new Date(),
-              },
+            await updateLicense(license.id, {
+              fingerprint,
+              activatedAt: new Date(),
+              lastSeenAt: new Date(),
             })
           } else if (license.fingerprint !== fingerprint) {
             // Licença já travada em outra máquina.
             return null
           } else {
-            await prisma.license.update({
-              where: { id: license.id },
-              data: { lastSeenAt: new Date() },
-            })
+            await updateLicense(license.id, { lastSeenAt: new Date() })
           }
 
           return {

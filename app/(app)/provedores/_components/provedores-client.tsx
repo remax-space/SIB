@@ -145,7 +145,7 @@ export function ProvedoresClient() {
                   </div>
 
                   {testResult && (
-                    <div className={`flex items-center gap-2 text-xs p-2 rounded ${testResult?.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                    <div className={`flex items-center gap-2 text-xs p-2 rounded ${testResult?.success ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
                       {testResult?.success ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                       <span className="truncate">{testResult?.message ?? (testResult?.success ? 'OK' : 'Falha')}</span>
                     </div>

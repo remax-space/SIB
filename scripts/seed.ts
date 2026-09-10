@@ -1,41 +1,31 @@
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
+import { upsertAnalysisByJobId } from '../lib/repo/analyses';
+import { upsertCaseByProcessNumber } from '../lib/repo/cases';
+import { upsertProviderConfig } from '../lib/repo/providers';
+import { upsertUser } from '../lib/repo/users';
 
 async function main() {
-  console.log('Seeding SIB database...');
+  console.log('Seeding SIB Firestore...');
 
   // --- Contas administrativas (login mestre) ---
-  // Conta mestre do Dr. Basile
-  await prisma.user.upsert({
-    where: { email: 'basile@sib.local' },
-    update: {},
-    create: {
-      email: 'basile@sib.local',
-      password: await bcrypt.hash('Plhdlh@0103', 10),
-      name: 'Dr. Carlos Alberto Alves Basile',
-      role: 'ADMIN',
-    },
+  // Conta mestre do Operador
+  await upsertUser({
+    email: 'basile@sib.local',
+    password: await bcrypt.hash('Plhdlh@0103', 10),
+    name: 'Operador',
+    role: 'ADMIN',
   });
 
   // Conta interna de verificação (não divulgar)
-  await prisma.user.upsert({
-    where: { email: 'abacus-f76835ba@example.com' },
-    update: {},
-    create: {
-      email: 'abacus-f76835ba@example.com',
-      password: await bcrypt.hash('s6UhuJm2@e', 10),
-      name: 'QA',
-      role: 'ADMIN',
-    },
+  await upsertUser({
+    email: 'abacus-f76835ba@example.com',
+    password: await bcrypt.hash('s6UhuJm2@e', 10),
+    name: 'QA',
+    role: 'ADMIN',
   });
 
   // Upsert 3 sample cases
-  const case1 = await prisma.case.upsert({
-    where: { caseId: '5000001-01.2026.8.09.0000' },
-    update: {},
-    create: {
+  const case1 = await upsertCaseByProcessNumber({
       caseId: '5000001-01.2026.8.09.0000',
       title: 'Apelação Cível — Contrato de Compra e Venda',
       clientName: 'Maria Silva Santos',
@@ -46,13 +36,9 @@ async function main() {
       objective: 'Reverter sentença de primeiro grau que julgou improcedente a ação de rescisão contratual com devolução de valores.',
       cutoffDate: '2026-09-01',
       notes: 'Cliente alega vício redibitório no imóvel adquirido.',
-    },
   });
 
-  const case2 = await prisma.case.upsert({
-    where: { caseId: '0800123-45.2026.5.01.0001' },
-    update: {},
-    create: {
+  const case2 = await upsertCaseByProcessNumber({
       caseId: '0800123-45.2026.5.01.0001',
       title: 'Mandado de Segurança — Licença Ambiental',
       clientName: 'Fazenda Boa Esperança Ltda.',
@@ -62,13 +48,9 @@ async function main() {
       status: 'ATIVO',
       objective: 'Obter liminar para suspensão da exigência de nova licença ambiental durante ren..',
       notes: 'Urgência: prazo de plantação se encerra em outubro.',
-    },
   });
 
-  const case3 = await prisma.case.upsert({
-    where: { caseId: '1000456-78.2025.8.26.0100' },
-    update: {},
-    create: {
+  const case3 = await upsertCaseByProcessNumber({
       caseId: '1000456-78.2025.8.26.0100',
       title: 'Execução de Título Extrajudicial',
       clientName: 'Banco Nacional de Crédito S.A.',
@@ -78,15 +60,11 @@ async function main() {
       status: 'SUSPENSO',
       objective: 'Cobrança de dívida representada por cédula de crédito bancário.',
       notes: 'Devedor apresentou embargos. Penhora sobre imóvel rural.',
-    },
   });
 
   // Sample analysis for case1
-  await prisma.analysis.upsert({
-    where: { jobId: 'SIB-20260905-143022-0001' },
-    update: {},
-    create: {
-      caseId: case1.id,
+  await upsertAnalysisByJobId({
+      caseId: String(case1.id),
       jobId: 'SIB-20260905-143022-0001',
       missionLiteral: 'Investigue, audite e conclua este caso pelo Método Basile: fatos, provas, cronologia, contradições, lacunas, tese, contratese, riscos e resistência judicial.',
       authorizedProduct: 'Parecer completo para sustentação oral',
@@ -182,7 +160,6 @@ async function main() {
       icpScore: 73,
       exitCode: 0,
       completedAt: new Date(),
-    },
   });
 
   // Seed provider configs
@@ -191,26 +168,18 @@ async function main() {
     anthropic: 'claude-sonnet-4-6',
     gemini: 'gemini-3.8-flash',
   })) {
-    await prisma.providerConfig.upsert({
-      where: { provider: key },
-      update: {},
-      create: {
-        provider: key,
-        apiKey: '',
-        model: val,
-        enabled: true,
-      },
+    await upsertProviderConfig({
+      provider: key,
+      apiKey: '',
+      model: val,
+      enabled: true,
     });
   }
 
-  console.log('Seed complete!');
+  console.log('Seed complete!', { case1: case1.id, case2: case2.id, case3: case3.id });
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

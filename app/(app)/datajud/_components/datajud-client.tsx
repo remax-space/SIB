@@ -25,7 +25,7 @@ export function DatajudClient() {
       <Card>
         <CardContent className="p-5 space-y-4">
           <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+            <Info className="w-5 h-5 text-info shrink-0 mt-0.5" />
             <div>
               <p className="text-sm text-foreground">Consulta ao DataJud — Base Nacional de Dados do Poder Judiciário</p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -75,7 +75,7 @@ export function DatajudClient() {
                   <p className="text-xs font-medium">{api.nome}</p>
                   <p className="text-[10px] text-muted-foreground">{api.desc}</p>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${api.status === 'Disponível' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${api.status === 'Disponível' ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
                   {api.status}
                 </span>
               </div>

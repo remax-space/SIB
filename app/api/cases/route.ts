@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { createCase, listCases } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 
 export async function GET(request: NextRequest) {
@@ -11,18 +11,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const classText = searchParams.get('classText');
 
-    const where: any = {};
-    if (status) where.status = status;
-    if (classText) where.classText = classText;
-
-    const cases = await prisma.case.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { documents: true, analyses: true } },
-      },
-    });
-
+    const cases = await listCases({ status, classText });
     return NextResponse.json(cases ?? []);
   } catch (error: any) {
     console.error('Cases GET error:', error);
@@ -40,8 +29,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Campos obrigatórios: caseId, title, clientName, classText, primaryRole' }, { status: 400 });
     }
 
-    const newCase = await prisma.case.create({
-      data: { caseId, title, clientName, clientDoc: clientDoc ?? null, classText, primaryRole, objective: objective ?? null, cutoffDate: cutoffDate ?? null, notes: notes ?? null },
+    const newCase = await createCase({
+      caseId,
+      title,
+      clientName,
+      clientDoc: clientDoc ?? null,
+      classText,
+      primaryRole,
+      objective: objective ?? null,
+      cutoffDate: cutoffDate ?? null,
+      notes: notes ?? null,
     });
 
     return NextResponse.json(newCase, { status: 201 });

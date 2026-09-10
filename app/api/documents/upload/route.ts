@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { getCaseById } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { generateUploadTarget } from '@/lib/storage';
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Campos obrigatórios: caseId, fileName, contentType' }, { status: 400 });
     }
 
-    const caseExists = await prisma.case.findUnique({ where: { id: caseId } });
+    const caseExists = await getCaseById(caseId);
     if (!caseExists) {
       return NextResponse.json({ error: 'Caso não encontrado' }, { status: 404 });
     }

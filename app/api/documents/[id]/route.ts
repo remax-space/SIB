@@ -1,15 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { deleteDocumentRecord, getDocumentById, updateDocument } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
-import { deleteStoredFile } from '@/lib/storage';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
   try {
     const { id } = await params;
-    const doc = await prisma.document.findUnique({ where: { id } });
+    const doc = await getDocumentById(id, true);
     if (!doc) return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
     return NextResponse.json(doc);
   } catch (error: any) {
@@ -23,7 +22,8 @@ export async function PATCH(_request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params;
     const body = await _request.json();
-    const updated = await prisma.document.update({ where: { id }, data: body ?? {} });
+    const updated = await updateDocument(id, body ?? {});
+    if (!updated) return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
     return NextResponse.json(updated);
   } catch (error: any) {
     console.error('Document PATCH error:', error);
@@ -35,11 +35,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
   try {
     const { id } = await params;
-    const doc = await prisma.document.findUnique({ where: { id } });
-    if (doc) {
-      try { await deleteStoredFile(doc.cloudStoragePath); } catch (e: any) { console.error('Storage delete error:', e); }
-      await prisma.document.delete({ where: { id } });
-    }
+    await deleteDocumentRecord(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Document DELETE error:', error);

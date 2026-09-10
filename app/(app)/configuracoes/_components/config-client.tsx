@@ -1,11 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import { PageHeader } from '@/components/layouts/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { FadeIn } from '@/components/ui/animate'
-import { Shield, Info, AlertTriangle } from 'lucide-react'
+import { ThemeSelector } from '@/components/theme-selector'
+import { Shield, Info, Palette } from 'lucide-react'
 import { SIB_VERSION, SIB_BUILD_DATE } from '@/lib/constants'
 
 export function ConfigClient() {
@@ -45,6 +44,20 @@ export function ConfigClient() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Palette className="w-4 h-4" />Aparência
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Escolha o tema da interface. A opção Sistema acompanha o modo claro ou escuro do dispositivo.
+          </p>
+          <ThemeSelector />
+        </CardContent>
+      </Card>
+
       {/* Data Governance */}
       <Card>
         <CardHeader>
@@ -54,7 +67,7 @@ export function ConfigClient() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs text-muted-foreground">Modo de Privacidade</p>
-              <p className="text-emerald-400">LEGAL_PROFESSIONAL</p>
+              <p className="text-success">LEGAL_PROFESSIONAL</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Proteção de Dados</p>
