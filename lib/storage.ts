@@ -71,6 +71,17 @@ export async function writeLocalFile(key: string, body: Buffer) {
   await fs.writeFile(full, body)
 }
 
+export async function writeStoredFile(key: string, body: Buffer, contentType?: string) {
+  if (storageDriver() === 'firebase') {
+    await getBucket().file(safeKey(key)).save(body, {
+      resumable: false,
+      contentType: contentType || 'application/octet-stream',
+    })
+    return
+  }
+  await writeLocalFile(key, body)
+}
+
 export async function readStoredFile(
   key: string,
   contentType: string,

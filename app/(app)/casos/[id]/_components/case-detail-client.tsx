@@ -11,6 +11,7 @@ import { FadeIn } from '@/components/ui/animate'
 import { ArrowLeft, Upload, FileText, Brain, Trash2, Eye, RefreshCw, Plus } from 'lucide-react'
 import { CASE_STATUSES, READ_STATUSES, ANALYSIS_STATUSES, getIcpClass } from '@/lib/constants'
 import { toast } from 'sonner'
+import { putUploadedFile } from '@/lib/upload-file'
 
 export function CaseDetailClient({ caseId }: { caseId: string }) {
   const [caseData, setCaseData] = useState<any>(null)
@@ -54,13 +55,9 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
         }
         const { uploadUrl, cloud_storage_path } = await presignRes.json()
 
-        // Step 2: Upload to S3
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type || 'application/pdf' },
-          body: file,
-        })
-        if (!uploadRes.ok) {
+        try {
+          await putUploadedFile(uploadUrl, file, cloud_storage_path)
+        } catch {
           toast.error(`Erro ao enviar ${file.name}`)
           continue
         }

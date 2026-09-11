@@ -9,6 +9,7 @@ import { FadeIn } from '@/components/ui/animate'
 import { Upload, X, Play, AlertTriangle, Copy, Check, Loader2 } from 'lucide-react'
 import { SIB_VERSION } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
+import { putUploadedFile } from '@/lib/upload-file'
 
 const MISSION_DEFAULT = 'Investigue, audite e conclua este PDF pelo Método Basile: fatos, provas, cronologia, contradições, lacunas, tese, contratese, riscos e resistência judicial. Ao final, indique objetivamente a melhor conduta do operador, sem inventar dados e sem usar memória como prova.'
 
@@ -145,13 +146,8 @@ export function DashboardClient() {
       const uploadData = await uploadRes.json()
       if (!uploadRes.ok) throw new Error(uploadData?.error ?? 'Erro no upload')
 
-      // Upload file content
-      if (uploadData.uploadUrl) {
-        await fetch(uploadData.uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': pdfFile.type || 'application/pdf' },
-          body: pdfFile,
-        })
+      if (uploadData.uploadUrl && uploadData.cloud_storage_path) {
+        await putUploadedFile(uploadData.uploadUrl, pdfFile, uploadData.cloud_storage_path)
       }
 
       // Complete upload

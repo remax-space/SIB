@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-helpers'
-import { writeLocalFile } from '@/lib/storage'
+import { writeStoredFile } from '@/lib/storage'
 
 export async function PUT(request: NextRequest) {
   const gate = await requireAuth()
@@ -19,7 +19,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
     }
 
-    await writeLocalFile(key, body)
+    await writeStoredFile(key, body, request.headers.get('content-type') ?? undefined)
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error('Local upload error:', error)

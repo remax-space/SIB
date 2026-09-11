@@ -1,4 +1,5 @@
 import { GoogleAuth } from 'google-auth-library'
+import { STORAGE_CORS } from '../lib/storage-cors'
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID ?? 'sib-advocacia'
 const LOCATION = 'southamerica-east1'
@@ -111,14 +112,7 @@ async function main() {
     {
       method: 'PATCH',
       body: JSON.stringify({
-        cors: [
-          {
-            origin: ['http://localhost:3000', 'https://localhost:3000'],
-            method: ['GET', 'PUT', 'POST', 'HEAD', 'DELETE'],
-            responseHeader: ['Content-Type', 'x-goog-resumable'],
-            maxAgeSeconds: 3600,
-          },
-        ],
+        cors: STORAGE_CORS,
       }),
     }
   )

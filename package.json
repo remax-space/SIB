@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "seed": "tsx --require dotenv/config scripts/safe-seed.ts",
     "ensure-master": "tsx --require dotenv/config scripts/ensure-master.ts",
-    "migrate:firestore": "tsx --require dotenv/config scripts/migrate-sqlite-to-firestore.ts"
+    "migrate:firestore": "tsx --require dotenv/config scripts/migrate-sqlite-to-firestore.ts",
+    "storage:cors": "tsx --require dotenv/config scripts/apply-storage-cors.ts"
   },
   "prisma": {
     "seed": "tsx --require dotenv/config scripts/safe-seed.ts"
