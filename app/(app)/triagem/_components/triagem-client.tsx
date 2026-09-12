@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { PageHeader } from '@/components/layouts/page-header'
 import { FileSearch, FileText, CheckCircle, AlertCircle, Clock, Eye } from 'lucide-react'
@@ -11,23 +12,9 @@ export function TriagemClient() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/cases')
-      .then(r => r.json())
-      .then(async (cases: any[]) => {
-        const allDocs: any[] = []
-        for (const c of (cases ?? []).slice(0, 20)) {
-          try {
-            const res = await fetch(`/api/cases/${c.id}`)
-            const data = await res.json()
-            if (data?.documents) {
-              for (const d of data.documents) {
-                allDocs.push({ ...d, caseName: c.caseId, caseDbId: c.id })
-              }
-            }
-          } catch { /* skip */ }
-        }
-        setDocs(allDocs)
-      })
+    fetch('/api/documents')
+      .then((res) => res.json())
+      .then((data) => setDocs(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -71,22 +58,28 @@ export function TriagemClient() {
                 </tr>
               </thead>
               <tbody>
-                {docs.map((d: any) => {
-                  const statusDef = READ_STATUSES.find(s => s.value === d.readStatus)
+                {docs.map((doc: any) => {
+                  const statusDef = READ_STATUSES.find((status) => status.value === doc.readStatus)
                   return (
-                    <tr key={d.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                    <tr key={doc.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
                       <td className="py-2 px-4">
                         <div className="flex items-center gap-2">
                           <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="text-xs">{d.filename}</span>
+                          <span className="text-xs">{doc.filename}</span>
                         </div>
                       </td>
-                      <td className="py-2 px-4 text-xs font-mono text-primary">{d.caseName}</td>
-                      <td className="py-2 px-4 text-xs text-muted-foreground">{d.pageCount ?? '—'}</td>
+                      <td className="py-2 px-4 text-xs font-mono text-primary">
+                        {doc.caseDbId ? (
+                          <Link href={`/casos/${doc.caseDbId}`} className="hover:underline">{doc.caseName}</Link>
+                        ) : (
+                          doc.caseName
+                        )}
+                      </td>
+                      <td className="py-2 px-4 text-xs text-muted-foreground">{doc.pageCount ?? '—'}</td>
                       <td className="py-2 px-4">
                         <div className="flex items-center gap-1.5">
-                          {getStatusIcon(d.readStatus)}
-                          <span className={`text-xs ${statusDef?.color?.split(' ')[1] ?? ''}`}>{statusDef?.label ?? d.readStatus}</span>
+                          {getStatusIcon(doc.readStatus)}
+                          <span className={`text-xs ${statusDef?.color?.split(' ')[1] ?? ''}`}>{statusDef?.label ?? doc.readStatus}</span>
                         </div>
                       </td>
                     </tr>

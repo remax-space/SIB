@@ -56,6 +56,16 @@ export async function listDocumentsByCase(caseId: string, withText = false) {
   )
 }
 
+export async function listRecentDocuments(limit = 200) {
+  const snap = await getDb()
+    .collection(COLLECTION)
+    .orderBy('uploadedAt', 'desc')
+    .limit(Math.min(Math.max(limit, 1), 500))
+    .get()
+
+  return snap.docs.map((doc) => toDocument(doc.id, doc.data()))
+}
+
 export async function getDocumentsWithText(ids: string[]) {
   if (!ids.length) return []
   const docs = await Promise.all(ids.map((id) => getDocumentById(id, true)))

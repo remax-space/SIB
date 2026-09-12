@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { getJurisprudenciaPrompt } from '@/lib/agent-prompts';
 import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm';
+import { fetchJurisprudencia } from '@/lib/jurisprudencia-fetch';
 
 function parseJSON(text: string): any {
   try {
@@ -27,36 +28,6 @@ function parseJSON(text: string): any {
   } catch {
     return { raw_text: text };
   }
-}
-
-/**
- * GATE DE JURISPRUDÊNCIA REAL
- * ---------------------------------------------------------------------------
- * A busca por precedentes reais depende de uma base/API contratada pelo
- * operador (ex.: Escavador, Jusbrasil, Digesto, Codilo, JusBrasil, DataJud).
- * Enquanto NENHUMA chave estiver configurada em /jurisprudencia (admin),
- * a consulta responde `status: 'aguardando_chave'` e o agente NÃO inventa
- * jurisprudência.
- *
- * Quando a chave for cadastrada, implemente aqui a chamada real à API
- * escolhida e monte `searchResults` com o texto dos precedentes retornados.
- */
-async function fetchJurisprudencia(
-  provider: string,
-  apiKey: string,
-  endpoint: string,
-  query: string
-): Promise<string> {
-  // TODO(API CONTRATADA): substituir pela integração real do provedor escolhido.
-  // O provedor, a chave e o endpoint já chegam prontos aqui. Exemplo esperado:
-  //   const r = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`, {
-  //     headers: { Authorization: `Bearer ${apiKey}` },
-  //   });
-  //   const data = await r.json();
-  //   return data.results.map(...).join('\n');
-  //
-  // Por enquanto retornamos string vazia — o agente responderá "sem_resultados".
-  return '';
 }
 
 export async function POST(request: NextRequest) {
@@ -81,10 +52,10 @@ export async function POST(request: NextRequest) {
     const endpoint = await getSetting('jurisprudencia_endpoint');
     const enabled = (await getSetting('jurisprudencia_enabled')) === 'true';
 
-    if (!apiKey || !enabled) {
+    if (!apiKey || !enabled || !endpoint) {
       return NextResponse.json({
         status: 'aguardando_chave',
-        message: 'A base de jurisprudência ainda não foi conectada. Cadastre a chave da API contratada na tela Jurisprudência (acesso administrador) para ativar a pesquisa de precedentes reais.',
+        message: 'A base de jurisprudência ainda não foi conectada. Cadastre a chave, o endpoint HTTPS e ative a pesquisa na tela Jurisprudência (acesso administrador). O sistema não inventa precedentes.',
       });
     }
 
@@ -105,8 +76,15 @@ export async function POST(request: NextRequest) {
     const mission = analysis.missionLiteral ?? '';
     const searchQuery = String(query ?? '').trim() || `${caseData?.classText ?? ''} ${caseData?.objective ?? ''} ${mission}`.trim();
 
-    // 3) Busca real na base contratada (gate)
-    const searchResults = await fetchJurisprudencia(cfgProvider, apiKey, endpoint, searchQuery);
+    let searchResults = ''
+    try {
+      searchResults = await fetchJurisprudencia(cfgProvider, apiKey, endpoint, searchQuery)
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: err?.message ?? 'Falha ao consultar a base contratada' },
+        { status: 502 }
+      )
+    }
 
     // 4) Agente de Jurisprudência analisa APENAS os resultados reais
     const providerKey = firstConfiguredProvider(provider ?? analysis.provider);

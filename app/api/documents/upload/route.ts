@@ -4,9 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCaseById } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { generateUploadTarget } from '@/lib/storage';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
+  const rl = rateLimit(`upload:${(gate.user as { id?: string } | undefined)?.id ?? 'anon'}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: `Muitos uploads em sequência. Aguarde ${rl.retryAfter}s.` }, { status: 429 });
+  }
   try {
     const body = await request.json();
     const { caseId, fileName, contentType, fileSize } = body ?? {};

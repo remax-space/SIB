@@ -3,10 +3,15 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { createDocument } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
+import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
+  const rl = rateLimit(`complete:${(gate.user as { id?: string } | undefined)?.id ?? 'anon'}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: `Muitos registros em sequência. Aguarde ${rl.retryAfter}s.` }, { status: 429 });
+  }
   try {
     const body = await request.json();
     const { caseId, fileName, contentType, fileSize, cloud_storage_path } = body ?? {};

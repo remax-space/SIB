@@ -7,20 +7,17 @@ import { upsertUser } from '../lib/repo/users';
 async function main() {
   console.log('Seeding SIB Firestore...');
 
-  // --- Contas administrativas (login mestre) ---
-  // Conta mestre do Operador
-  await upsertUser({
-    email: 'basile@sib.local',
-    password: await bcrypt.hash('Plhdlh@0103', 10),
-    name: 'Operador',
-    role: 'ADMIN',
-  });
+  const masterEmail = (process.env.MASTER_EMAIL ?? '').trim().toLowerCase()
+  const masterPassword = process.env.MASTER_PASSWORD ?? ''
+  const masterName = process.env.MASTER_NAME ?? 'Operador Mestre'
+  if (!masterEmail || !masterPassword) {
+    throw new Error('Defina MASTER_EMAIL e MASTER_PASSWORD no .env antes de executar o seed.')
+  }
 
-  // Conta interna de verificação (não divulgar)
   await upsertUser({
-    email: 'abacus-f76835ba@example.com',
-    password: await bcrypt.hash('s6UhuJm2@e', 10),
-    name: 'QA',
+    email: masterEmail,
+    password: await bcrypt.hash(masterPassword, 10),
+    name: masterName,
     role: 'ADMIN',
   });
 

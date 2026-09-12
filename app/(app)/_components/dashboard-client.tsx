@@ -1,58 +1,73 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { FadeIn } from '@/components/ui/animate'
 import { Upload, X, Play, AlertTriangle, Copy, Check, Loader2 } from 'lucide-react'
-import { SIB_VERSION } from '@/lib/constants'
+import { AGENTS, DEFAULT_MISSION, LEGAL_CLASSES, SIB_VERSION } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
 import { putUploadedFile } from '@/lib/upload-file'
 
-const MISSION_DEFAULT = 'Investigue, audite e conclua este PDF pelo Método Basile: fatos, provas, cronologia, contradições, lacunas, tese, contratese, riscos e resistência judicial. Ao final, indique objetivamente a melhor conduta do operador, sem inventar dados e sem usar memória como prova.'
+const AGENT_FIELDS: Record<string, string> = {
+  basile: 'basileResult',
+  advocado: 'advocadoResult',
+  cabeca: 'cabecaResult',
+  auditor: 'auditorResult',
+  mestre: 'mestreResult',
+  orientacoes: 'orientacoesResult',
+}
 
 interface AgentResult {
   status: 'waiting' | 'running' | 'done' | 'error'
   content: string
-  raw?: any
+}
+
+function emptyAgents(): Record<string, AgentResult> {
+  return Object.fromEntries(AGENTS.map((agent) => [agent.key, { status: 'waiting', content: '' }]))
 }
 
 export function DashboardClient() {
-  // Form state
   const [caseId, setCaseId] = useState('')
   const [clientName, setClientName] = useState('')
+  const [legalClass, setLegalClass] = useState('ACAO_CONHECIMENTO')
   const [complement, setComplement] = useState('')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [pdfName, setPdfName] = useState('')
-  
-  // Case/corpus status
+
   const [caseStatus, setCaseStatus] = useState('PENDENTE')
   const [corpusStatus, setCorpusStatus] = useState('SEM ARQUIVO')
   const [clientStatus, setClientStatus] = useState('PENDENTE')
-  
-  // Analysis state
+
   const [isRunning, setIsRunning] = useState(false)
-  const [basile, setBasile] = useState<AgentResult>({ status: 'waiting', content: '' })
-  const [advocado, setAdvogado] = useState<AgentResult>({ status: 'waiting', content: '' })
-  const [cabeca, setCabeca] = useState<AgentResult>({ status: 'waiting', content: '' })
-  const [mestre, setMestre] = useState<AgentResult>({ status: 'waiting', content: '' })
+  const [agents, setAgents] = useState<Record<string, AgentResult>>(emptyAgents)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
+  const [createdCaseId, setCreatedCaseId] = useState<string | null>(null)
   const [pendencias, setPendencias] = useState<string[]>([])
-  
-  // Copied state
   const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const updateAgent = (key: string, next: Partial<AgentResult> | ((prev: AgentResult) => AgentResult)) => {
+    setAgents((prev) => {
+      const current = prev[key] ?? { status: 'waiting', content: '' }
+      return {
+        ...prev,
+        [key]: typeof next === 'function' ? next(current) : { ...current, ...next },
+      }
+    })
+  }
+
   const checkPendencias = useCallback(() => {
-    const p: string[] = []
-    if (!caseId.trim()) p.push('Processo / Case ID não informado')
-    if (!pdfFile && corpusStatus === 'SEM ARQUIVO') p.push('PDF / Corpus não adicionado')
-    if (!clientName.trim()) p.push('Nome do cliente não informado')
-    setPendencias(p)
-    return p
+    const pending: string[] = []
+    if (!caseId.trim()) pending.push('Processo / Case ID não informado')
+    if (!pdfFile && corpusStatus === 'SEM ARQUIVO') pending.push('PDF / Corpus não adicionado')
+    if (!clientName.trim()) pending.push('Nome do cliente não informado')
+    setPendencias(pending)
+    return pending
   }, [caseId, pdfFile, corpusStatus, clientName])
 
   const handleAddPdf = () => {
@@ -71,17 +86,16 @@ export function DashboardClient() {
   const handleClearFields = () => {
     setCaseId('')
     setClientName('')
+    setLegalClass('ACAO_CONHECIMENTO')
     setComplement('')
     setPdfFile(null)
     setPdfName('')
     setCaseStatus('PENDENTE')
     setCorpusStatus('SEM ARQUIVO')
     setClientStatus('PENDENTE')
-    setBasile({ status: 'waiting', content: '' })
-    setAdvogado({ status: 'waiting', content: '' })
-    setCabeca({ status: 'waiting', content: '' })
-    setMestre({ status: 'waiting', content: '' })
+    setAgents(emptyAgents())
     setAnalysisId(null)
+    setCreatedCaseId(null)
     setPendencias([])
     setIsRunning(false)
   }
@@ -101,18 +115,17 @@ export function DashboardClient() {
   }
 
   const handleExecutarRodada = async () => {
-    const p = checkPendencias()
-    if (p.length > 0) return
+    const pending = checkPendencias()
+    if (pending.length > 0) return
     if (!pdfFile) return
 
+    const classDef = LEGAL_CLASSES.find((item) => item.value === legalClass)
     setIsRunning(true)
-    setBasile({ status: 'running', content: '' })
-    setAdvogado({ status: 'waiting', content: '' })
-    setCabeca({ status: 'waiting', content: '' })
-    setMestre({ status: 'waiting', content: '' })
+    setAgents(Object.fromEntries(
+      AGENTS.map((agent) => [agent.key, { status: agent.key === 'basile' ? 'running' : 'waiting', content: '' }])
+    ))
 
     try {
-      // 1. Create case
       setCaseStatus('CRIANDO...')
       const caseRes = await fetch('/api/cases', {
         method: 'POST',
@@ -121,8 +134,8 @@ export function DashboardClient() {
           caseId: caseId.trim(),
           title: caseId.trim(),
           clientName: clientName.trim(),
-          classText: 'Ação de Conhecimento',
-          primaryRole: 'ACAO_CONHECIMENTO',
+          classText: classDef?.label ?? 'Ação de Conhecimento (genérica)',
+          primaryRole: classDef?.role ?? 'ACAO_CONHECIMENTO',
           status: 'ATIVO',
         }),
       })
@@ -130,8 +143,8 @@ export function DashboardClient() {
       if (!caseRes.ok) throw new Error(caseData?.error ?? 'Erro ao criar caso')
       setCaseStatus('ATIVO')
       setClientStatus(clientName.trim())
+      setCreatedCaseId(caseData.id)
 
-      // 2. Upload PDF  
       setCorpusStatus('ENVIANDO...')
       const uploadRes = await fetch('/api/documents/upload', {
         method: 'POST',
@@ -150,7 +163,6 @@ export function DashboardClient() {
         await putUploadedFile(uploadData.uploadUrl, pdfFile, uploadData.cloud_storage_path)
       }
 
-      // Complete upload
       const completeRes = await fetch('/api/documents/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,7 +179,6 @@ export function DashboardClient() {
       const documentId = completeData.id
       setCorpusStatus(pdfFile.name + ' ✓')
 
-      // 3. Extract text
       setCorpusStatus('EXTRAINDO TEXTO...')
       const extractRes = await fetch(`/api/documents/${documentId}/extract`, {
         method: 'POST',
@@ -178,75 +189,72 @@ export function DashboardClient() {
         setCorpusStatus(pdfFile.name + ' ✓ (texto extraído)')
       }
 
-      // 4. Run analysis via SSE
-      const mission = MISSION_DEFAULT + (complement.trim() ? '\n\nCOMPLEMENTO DO OPERADOR: ' + complement.trim() : '')
-      
+      const mission = DEFAULT_MISSION + (complement.trim() ? '\n\nCOMPLEMENTO DO OPERADOR: ' + complement.trim() : '')
+
       const analysisRes = await fetch('/api/analysis/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caseId: caseData.id,
           missionLiteral: mission,
-          provider: 'openai',
           runMode: 'COMPLETA',
           documentIds: [documentId],
         }),
       })
+
+      if (!analysisRes.ok) {
+        const err = await analysisRes.json().catch(() => ({}))
+        throw new Error(err?.error ?? 'Erro ao iniciar análise')
+      }
 
       const newAnalysisId = analysisRes.headers.get('X-Analysis-Id')
       if (newAnalysisId) setAnalysisId(newAnalysisId)
 
       const reader = analysisRes.body?.getReader()
       const decoder = new TextDecoder()
-      
+
       if (reader) {
         let buffer = ''
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          
+
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
           buffer = lines.pop() ?? ''
-          
+
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
             try {
               const event = JSON.parse(line.slice(6))
-              
-              if (event.status === 'agent_start') {
-                if (event.agent === 'basile') setBasile(prev => ({ ...prev, status: 'running' }))
-                if (event.agent === 'advocado') setAdvogado(prev => ({ ...prev, status: 'running' }))
-                if (event.agent === 'cabeca') setCabeca(prev => ({ ...prev, status: 'running' }))
-                if (event.agent === 'mestre') setMestre(prev => ({ ...prev, status: 'running' }))
+
+              if (event.status === 'agent_start' && event.agent) {
+                updateAgent(event.agent, { status: 'running' })
               }
-              
-              if (event.status === 'agent_complete') {
-                // Fetch the latest analysis to get results
-                if (newAnalysisId) {
-                  const aRes = await fetch(`/api/analysis/${newAnalysisId}`)
-                  const aData = await aRes.json()
-                  
-                  if (event.agent === 'basile' && aData.basileResult) {
-                    setBasile({ status: 'done', content: formatAgentOutput(aData.basileResult, 'basile'), raw: aData.basileResult })
-                  }
-                  if (event.agent === 'advocado' && aData.advocadoResult) {
-                    setAdvogado({ status: 'done', content: formatAgentOutput(aData.advocadoResult, 'advocado'), raw: aData.advocadoResult })
-                  }
-                  if (event.agent === 'cabeca' && aData.cabecaResult) {
-                    setCabeca({ status: 'done', content: formatAgentOutput(aData.cabecaResult, 'cabeca'), raw: aData.cabecaResult })
-                  }
-                  if (event.agent === 'mestre' && aData.mestreResult) {
-                    setMestre({ status: 'done', content: formatAgentOutput(aData.mestreResult, 'mestre'), raw: aData.mestreResult })
-                  }
+
+              if (event.status === 'agent_complete' && event.agent && newAnalysisId) {
+                const aRes = await fetch(`/api/analysis/${newAnalysisId}`)
+                const aData = await aRes.json()
+                const field = AGENT_FIELDS[event.agent]
+                if (field && aData[field]) {
+                  updateAgent(event.agent, {
+                    status: 'done',
+                    content: formatAgentOutput(aData[field], event.agent),
+                  })
                 }
               }
-              
+
               if (event.status === 'error') {
-                setBasile(prev => prev.status === 'running' ? { ...prev, status: 'error', content: event.message } : prev)
-                setAdvogado(prev => prev.status === 'running' ? { ...prev, status: 'error', content: event.message } : prev)
-                setCabeca(prev => prev.status === 'running' ? { ...prev, status: 'error', content: event.message } : prev)
-                setMestre(prev => prev.status === 'running' ? { ...prev, status: 'error', content: event.message } : prev)
+                setAgents((prev) =>
+                  Object.fromEntries(
+                    Object.entries(prev).map(([key, agent]) => [
+                      key,
+                      agent.status === 'running'
+                        ? { ...agent, status: 'error', content: event.message }
+                        : agent,
+                    ])
+                  )
+                )
               }
             } catch { /* parse error, skip */ }
           }
@@ -254,48 +262,35 @@ export function DashboardClient() {
       }
     } catch (err: any) {
       console.error('Execution error:', err)
-      setBasile(prev => prev.status === 'running' ? { status: 'error', content: err?.message ?? 'Erro' } : prev)
+      updateAgent('basile', (prev) =>
+        prev.status === 'running' ? { status: 'error', content: err?.message ?? 'Erro' } : prev
+      )
     } finally {
       setIsRunning(false)
     }
   }
 
-  function getAgentStatusLabel(status: AgentResult['status']): string {
-    switch (status) {
-      case 'waiting': return 'AGUARDANDO RODADA'
-      case 'running': return 'PROCESSANDO...'
-      case 'done': return 'CONCLUÍDO'
-      case 'error': return 'ERRO'
-    }
-  }
-
-  function getAgentStatusColor(status: AgentResult['status']): string {
-    switch (status) {
-      case 'waiting': return 'text-muted-foreground'
-      case 'running': return 'text-info'
-      case 'done': return 'text-success'
-      case 'error': return 'text-destructive'
-    }
-  }
+  const triad = AGENTS.filter((agent) => ['basile', 'advocado', 'cabeca'].includes(agent.key))
+  const auditor = AGENTS.find((agent) => agent.key === 'auditor')
+  const mestre = AGENTS.find((agent) => agent.key === 'mestre')
+  const orientador = AGENTS.find((agent) => agent.key === 'orientacoes')
 
   return (
     <div className="space-y-6">
       <FadeIn>
-        {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
             SISTEMA INTELIGÊNCIA JURÍDICA BASILE
           </h1>
           <p className="text-sm text-info mt-1">
-            Fluxo direto: processo + PDF/corpus + missão → Operador → Advogado do Diabo → Cabeça do Juiz → MESTRE.
+            Fluxo direto: processo + PDF/corpus + missão → Operador → Advogado do Diabo → Cabeça do Juiz → Auditor → MESTRE → Orientador.
           </p>
+          <p className="text-xs text-muted-foreground mt-1 font-mono">{SIB_VERSION}</p>
         </div>
       </FadeIn>
 
-      {/* Main Form Card */}
       <Card className="border-border/50">
         <CardContent className="p-5 space-y-4">
-          {/* Row 1: Process ID + PDF + Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-start">
             <div>
               <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">PROCESSO / CASE ID</label>
@@ -349,11 +344,10 @@ export function DashboardClient() {
             </div>
           </div>
 
-          {/* Row 2: Client Name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <div>
               <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-                NOME DO CLIENTE — ENTER PARA CADASTRAR /
+                NOME DO CLIENTE — ENTER PARA CADASTRAR
               </label>
               <Input
                 value={clientName}
@@ -364,22 +358,31 @@ export function DashboardClient() {
                 disabled={isRunning}
               />
             </div>
-            <div className="flex items-end h-full pb-1">
-              <p className="text-xs text-muted-foreground">
+            <div>
+              <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">CLASSE PROCESSUAL</label>
+              <select
+                value={legalClass}
+                onChange={(e) => setLegalClass(e.target.value)}
+                disabled={isRunning}
+                className="w-full h-10 rounded-md bg-input border border-border px-3 text-sm"
+              >
+                {LEGAL_CLASSES.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+              <p className="text-xs mt-1 text-muted-foreground">
                 CLIENTE/CAIXA: <span className={clientStatus === 'PENDENTE' ? 'text-muted-foreground' : 'text-success'}>{clientStatus}</span>
-                {clientStatus === 'PENDENTE' && <span className="text-muted-foreground"> — após adicionar o PDF, informe o cliente e pressione ENTER.</span>}
               </p>
             </div>
           </div>
 
-          {/* Row 3: Mission + Execute */}
           <div>
             <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
               MISSÃO PADRÃO DO MÉTODO BASILE — FIXA
             </label>
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
               <Textarea
-                value={MISSION_DEFAULT}
+                value={DEFAULT_MISSION}
                 readOnly
                 className="text-sm bg-input border-border min-h-[80px] resize-none"
               />
@@ -400,7 +403,6 @@ export function DashboardClient() {
             </div>
           </div>
 
-          {/* Row 4: Complement + Pendencias */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
             <div>
               <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
@@ -425,129 +427,155 @@ export function DashboardClient() {
             </div>
           </div>
 
-          {/* Pendencias Alert */}
           {pendencias.length > 0 && (
             <div className="bg-nav/40 border border-nav-border rounded-lg p-3">
               <p className="text-xs font-bold text-nav-foreground mb-1">PENDÊNCIAS IDENTIFICADAS:</p>
               <ul className="text-xs text-muted-foreground space-y-0.5">
-                {pendencias.map((p, i) => (
-                  <li key={i}>• {p}</li>
+                {pendencias.map((item) => (
+                  <li key={item}>• {item}</li>
                 ))}
               </ul>
             </div>
           )}
+
+          {analysisId && createdCaseId && (
+            <p className="text-xs">
+              <Link href={`/casos/${createdCaseId}/analise/${analysisId}`} className="text-primary hover:underline">
+                Abrir resultado completo da rodada →
+              </Link>
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Section 6: Results - Three Independent Analyses */}
       <div>
         <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
-          6. RESULTADOS DA RODADA — TRÊS ANÁLISES INDEPENDENTES
+          6. RESULTADOS DA RODADA — TRÍADE INDEPENDENTE
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* OPERADOR */}
-          <AgentCard
-            title="OPERADOR"
-            agent={basile}
-            onCopy={() => handleCopy('basile', basile.content)}
-            copied={copiedAgent === 'basile'}
-          />
-          {/* ADVOGADO DO DIABO */}
-          <AgentCard
-            title="ADVOGADO DO DIABO"
-            agent={advocado}
-            onCopy={() => handleCopy('advocado', advocado.content)}
-            copied={copiedAgent === 'advocado'}
-          />
-          {/* CABEÇA DO JUIZ */}
-          <AgentCard
-            title="CABEÇA DO JUIZ"
-            agent={cabeca}
-            onCopy={() => handleCopy('cabeca', cabeca.content)}
-            copied={copiedAgent === 'cabeca'}
-          />
+          {triad.map((agent) => (
+            <AgentCard
+              key={agent.key}
+              title={agent.label}
+              agent={agents[agent.key]}
+              onCopy={() => handleCopy(agent.key, agents[agent.key]?.content ?? '')}
+              copied={copiedAgent === agent.key}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Section 7: MESTRE Conclusion */}
-      <div>
-        <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
-          7. CONCLUSÃO DO MESTRE — AUDITORIA POSTERIOR À TRÍADE
-        </h2>
-        <Card className="border-primary/30">
-          <div className="bg-primary/20 px-4 py-2">
-            <h3 className="text-sm font-bold text-primary">MESTRE — SÍNTESE ESTRATÉGICA</h3>
-          </div>
-          <CardContent className="p-4">
-            <p className={`text-xs font-medium mb-2 ${getAgentStatusColor(mestre.status)}`}>
-              {mestre.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
-              {getAgentStatusLabel(mestre.status)}
-            </p>
-            <div className="text-sm bg-input border border-border rounded-md min-h-[200px] max-h-[420px] overflow-y-auto p-3 whitespace-pre-wrap leading-relaxed">
-              {mestre.content || <span className="text-muted-foreground">Aguardando conclusão do MESTRE...</span>}
+      {auditor && (
+        <div>
+          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+            6B. AUDITOR DOCUMENTAL — INTEGRIDADE E ICP
+          </h2>
+          <AgentCard
+            title={auditor.label}
+            agent={agents[auditor.key]}
+            onCopy={() => handleCopy(auditor.key, agents[auditor.key]?.content ?? '')}
+            copied={copiedAgent === auditor.key}
+          />
+        </div>
+      )}
+
+      {mestre && (
+        <div>
+          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+            7. CONCLUSÃO DO MESTRE — AUDITORIA POSTERIOR À TRÍADE
+          </h2>
+          <Card className="border-primary/30">
+            <div className="bg-primary/20 px-4 py-2">
+              <h3 className="text-sm font-bold text-primary">MESTRE — SÍNTESE ESTRATÉGICA</h3>
             </div>
-            <div className="flex justify-end mt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCopy('mestre', mestre.content)}
-                disabled={!mestre.content}
-                className="text-xs"
-              >
-                {copiedAgent === 'mestre' ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                COPIAR
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <CardContent className="p-4">
+              <AgentBody agent={agents[mestre.key]} />
+              <div className="flex justify-end mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopy('mestre', agents[mestre.key]?.content ?? '')}
+                  disabled={!agents[mestre.key]?.content}
+                  className="text-xs"
+                >
+                  {copiedAgent === 'mestre' ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
+                  COPIAR
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {orientador && (
+        <div>
+          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+            8. ORIENTADOR — REVISOR INDEPENDENTE
+          </h2>
+          <AgentCard
+            title={orientador.label}
+            agent={agents[orientador.key]}
+            onCopy={() => handleCopy(orientador.key, agents[orientador.key]?.content ?? '')}
+            copied={copiedAgent === orientador.key}
+          />
+        </div>
+      )}
     </div>
+  )
+}
+
+function getAgentStatusLabel(status: AgentResult['status']): string {
+  switch (status) {
+    case 'waiting': return 'AGUARDANDO RODADA'
+    case 'running': return 'PROCESSANDO...'
+    case 'done': return 'CONCLUÍDO'
+    case 'error': return 'ERRO'
+  }
+}
+
+function getAgentStatusColor(status: AgentResult['status']): string {
+  switch (status) {
+    case 'waiting': return 'text-muted-foreground'
+    case 'running': return 'text-info'
+    case 'done': return 'text-success'
+    case 'error': return 'text-destructive'
+  }
+}
+
+function AgentBody({ agent }: { agent?: AgentResult }) {
+  const current = agent ?? { status: 'waiting' as const, content: '' }
+  return (
+    <>
+      <p className={`text-xs font-medium mb-2 ${getAgentStatusColor(current.status)}`}>
+        {current.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
+        {getAgentStatusLabel(current.status)}
+      </p>
+      <div className="text-sm bg-input border border-border rounded-md min-h-[150px] max-h-[320px] overflow-y-auto p-3 whitespace-pre-wrap leading-relaxed">
+        {current.content || <span className="text-muted-foreground"> </span>}
+      </div>
+    </>
   )
 }
 
 function AgentCard({ title, agent, onCopy, copied }: {
   title: string
-  agent: AgentResult
+  agent?: AgentResult
   onCopy: () => void
   copied: boolean
 }) {
-  const statusLabel = (() => {
-    switch (agent.status) {
-      case 'waiting': return 'AGUARDANDO RODADA'
-      case 'running': return 'PROCESSANDO...'
-      case 'done': return 'CONCLUÍDO'
-      case 'error': return 'ERRO'
-    }
-  })()
-
-  const statusColor = (() => {
-    switch (agent.status) {
-      case 'waiting': return 'text-muted-foreground'
-      case 'running': return 'text-info'
-      case 'done': return 'text-success'
-      case 'error': return 'text-destructive'
-    }
-  })()
-
   return (
     <Card className="border-border/50">
       <div className="bg-surface-2 px-4 py-2">
         <h3 className="text-sm font-bold text-foreground">{title}</h3>
       </div>
       <CardContent className="p-4">
-        <p className={`text-xs font-medium mb-2 ${statusColor}`}>
-          {agent.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
-          {statusLabel}
-        </p>
-        <div className="text-sm bg-input border border-border rounded-md min-h-[150px] max-h-[320px] overflow-y-auto p-3 whitespace-pre-wrap leading-relaxed">
-          {agent.content || <span className="text-muted-foreground"> </span>}
-        </div>
+        <AgentBody agent={agent} />
         <div className="flex justify-center mt-2">
           <Button
             variant="outline"
             size="sm"
             onClick={onCopy}
-            disabled={!agent.content}
+            disabled={!agent?.content}
             className="text-xs"
           >
             {copied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}

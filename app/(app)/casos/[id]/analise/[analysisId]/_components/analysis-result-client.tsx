@@ -13,6 +13,7 @@ import { FadeIn, SlideIn } from '@/components/ui/animate'
 import { ArrowLeft, Download, Loader2, AlertTriangle } from 'lucide-react'
 import { ANALYSIS_STATUSES, AGENTS, getIcpClass, getIcpLabel } from '@/lib/constants'
 import { formatAgentOutput, normalizeAgentResult } from '@/lib/format-agent-output'
+import { JurisprudenciaResult } from '@/components/jurisprudencia-result'
 
 export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; analysisId: string }) {
   const router = useRouter()
@@ -168,6 +169,9 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                 {agent?.icon} {agent?.label}
               </TabsTrigger>
             )) ?? []}
+            <TabsTrigger value="jurisprudencia" className="text-xs">
+              📚 JURISPRUDÊNCIA
+            </TabsTrigger>
           </TabsList>
 
           {/* OPERADOR */}
@@ -604,6 +608,18 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                   <p className="text-sm text-muted-foreground">O revisor independente não retornou conteúdo estruturado para esta análise.</p>
                 )}
               </div>
+            </SlideIn>
+          </TabsContent>
+
+          <TabsContent value="jurisprudencia">
+            <SlideIn from="bottom">
+              {analysis?.jurisprudenciaResult ? (
+                <JurisprudenciaResult result={normalizeAgentResult(analysis.jurisprudenciaResult)} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma consulta jurisprudencial foi gravada nesta análise. Use a tela Jurisprudência para pesquisar precedentes reais sobre este caso.
+                </p>
+              )}
             </SlideIn>
           </TabsContent>
         </Tabs>

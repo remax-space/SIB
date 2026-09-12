@@ -1,5 +1,5 @@
-export const SIB_VERSION = '17.0 R2';
-export const SIB_BUILD_DATE = '2026-09-07';
+export const SIB_VERSION = '17.1 R1';
+export const SIB_BUILD_DATE = '2026-09-12';
 
 export const LEGAL_CLASSES = [
   { value: 'ACAO_INOMINADA', label: 'Ação Inominada', role: 'ACAO_CONHECIMENTO' },

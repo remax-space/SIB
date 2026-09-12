@@ -38,7 +38,7 @@ export function ConfigClient() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Pipeline de Agentes</p>
-              <p>5 agentes sequenciais</p>
+              <p>6 agentes sequenciais + jurisprudência</p>
             </div>
           </div>
         </CardContent>

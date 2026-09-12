@@ -5,9 +5,14 @@ import { getDocumentById, setDocumentExtractedText } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { readStoredFile } from '@/lib/storage';
 import { extractPdfText } from '@/lib/llm';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
+  const rl = rateLimit(`extract:${(gate.user as { id?: string } | undefined)?.id ?? 'anon'}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: `Muitas extrações em sequência. Aguarde ${rl.retryAfter}s.` }, { status: 429 });
+  }
   try {
     const { id } = await params;
     const doc = await getDocumentById(id);
