@@ -9251,6 +9251,11 @@ undici-types@~6.11.1:
   resolved "https://registry.npmjs.org/undici-types/-/undici-types-6.11.1.tgz"
   integrity sha512-mIDEX2ek50x0OlRgxryxsenE5XaQD4on5U2inY7RApK3SOJpofyw7uW2AyfMKkhAxXIceo2DeWGVGwyvng1GNQ==
 
+unpdf@^1.8.1:
+  version "1.8.1"
+  resolved "https://registry.npmjs.org/unpdf/-/unpdf-1.8.1.tgz"
+  integrity sha512-xkURhy2SoGpOIH0a1gLHNkASPIQYonadDJs2AQwPEfUakafeD9EA1WTWWsaR++gfTCXJpV27W7tU1nXuk82UKQ==
+
 unquote@^1.1.0:
   version "1.1.1"
   resolved "https://registry.npmjs.org/unquote/-/unquote-1.1.1.tgz"

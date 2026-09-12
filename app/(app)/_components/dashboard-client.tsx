@@ -8,9 +8,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { FadeIn } from '@/components/ui/animate'
 import { Upload, X, Play, AlertTriangle, Copy, Check, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { AGENTS, DEFAULT_MISSION, LEGAL_CLASSES, SIB_VERSION } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
 import { putUploadedFile } from '@/lib/upload-file'
+import { extractCnjFromText, type PdfCaseMetadataField } from '@/lib/pdf-case-metadata'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const AGENT_FIELDS: Record<string, string> = {
   basile: 'basileResult',
@@ -48,8 +58,15 @@ export function DashboardClient() {
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null)
   const [pendencias, setPendencias] = useState<string[]>([])
   const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
+  const [readingPdf, setReadingPdf] = useState(false)
+  const [metaModalOpen, setMetaModalOpen] = useState(false)
+  const [metaMissing, setMetaMissing] = useState<PdfCaseMetadataField[]>([])
+  const [manualCaseId, setManualCaseId] = useState('')
+  const [manualClientName, setManualClientName] = useState('')
+  const [manualLegalClass, setManualLegalClass] = useState('ACAO_CONHECIMENTO')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const legalClassTouchedRef = useRef(false)
 
   const updateAgent = (key: string, next: Partial<AgentResult> | ((prev: AgentResult) => AgentResult)) => {
     setAgents((prev) => {
@@ -74,13 +91,120 @@ export function DashboardClient() {
     fileInputRef.current?.click()
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setPdfFile(file)
-      setPdfName(file.name)
-      setCorpusStatus(file.name)
+  const applyExtractedMetadata = (
+    found: { caseId?: string; clientName?: string; legalClass?: string },
+    current: { caseId: string; clientName: string; legalClassTouched: boolean }
+  ) => {
+    const nextCaseId = current.caseId.trim() || found.caseId?.trim() || ''
+    const nextClientName = current.clientName.trim() || found.clientName?.trim() || ''
+    const nextLegalClass = found.legalClass?.trim() || ''
+
+    if (nextCaseId) setCaseId(nextCaseId)
+    if (nextClientName) {
+      setClientName(nextClientName)
+      setClientStatus(nextClientName)
     }
+    if (nextLegalClass) {
+      setLegalClass(nextLegalClass)
+      legalClassTouchedRef.current = true
+    }
+
+    const missing: PdfCaseMetadataField[] = []
+    if (!nextCaseId) missing.push('caseId')
+    if (!nextClientName) missing.push('clientName')
+    if (!nextLegalClass && !current.legalClassTouched) missing.push('legalClass')
+
+    if (missing.length > 0) {
+      setManualCaseId(nextCaseId)
+      setManualClientName(nextClientName)
+      setManualLegalClass(nextLegalClass || 'ACAO_CONHECIMENTO')
+      setMetaMissing(missing)
+      setMetaModalOpen(true)
+    } else {
+      toast.success('Dados do PDF preenchidos automaticamente.')
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    setPdfFile(file)
+    setPdfName(file.name)
+    setCorpusStatus('LENDO PDF...')
+    setReadingPdf(true)
+
+    const fromName = extractCnjFromText(file.name)
+    if (fromName && !caseId.trim()) setCaseId(fromName)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/documents/preview-metadata', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Não foi possível ler o PDF.')
+        applyExtractedMetadata({ caseId: fromName }, {
+          caseId,
+          clientName,
+          legalClassTouched: legalClassTouchedRef.current,
+        })
+        setCorpusStatus(file.name)
+        return
+      }
+
+      applyExtractedMetadata({
+        caseId: data?.caseId || fromName,
+        clientName: data?.clientName,
+        legalClass: data?.legalClass,
+      }, {
+        caseId,
+        clientName,
+        legalClassTouched: legalClassTouchedRef.current,
+      })
+      setCorpusStatus(file.name)
+    } catch {
+      toast.error('Falha ao ler o PDF. Preencha os dados manualmente.')
+      applyExtractedMetadata({ caseId: fromName }, {
+        caseId,
+        clientName,
+        legalClassTouched: legalClassTouchedRef.current,
+      })
+      setCorpusStatus(file.name)
+    } finally {
+      setReadingPdf(false)
+    }
+  }
+
+  const handleConfirmManualMetadata = () => {
+    if (metaMissing.includes('caseId') && !manualCaseId.trim()) {
+      toast.error('Informe o número do processo.')
+      return
+    }
+    if (metaMissing.includes('clientName') && !manualClientName.trim()) {
+      toast.error('Informe o nome do cliente.')
+      return
+    }
+    if (metaMissing.includes('legalClass') && !manualLegalClass.trim()) {
+      toast.error('Informe a classe processual.')
+      return
+    }
+
+    if (manualCaseId.trim()) setCaseId(manualCaseId.trim())
+    if (manualClientName.trim()) {
+      setClientName(manualClientName.trim())
+      setClientStatus(manualClientName.trim())
+    }
+    if (manualLegalClass.trim()) {
+      setLegalClass(manualLegalClass)
+      legalClassTouchedRef.current = true
+    }
+    setMetaModalOpen(false)
+    toast.success('Dados do processo confirmados.')
   }
 
   const handleClearFields = () => {
@@ -98,6 +222,13 @@ export function DashboardClient() {
     setCreatedCaseId(null)
     setPendencias([])
     setIsRunning(false)
+    setReadingPdf(false)
+    setMetaModalOpen(false)
+    setMetaMissing([])
+    setManualCaseId('')
+    setManualClientName('')
+    setManualLegalClass('ACAO_CONHECIMENTO')
+    legalClassTouchedRef.current = false
   }
 
   const handleClientKeyDown = (e: React.KeyboardEvent) => {
@@ -299,7 +430,7 @@ export function DashboardClient() {
                 onChange={(e) => setCaseId(e.target.value)}
                 placeholder="Ex: 5000001-01.2026.8.09.0000"
                 className="font-mono text-sm bg-input border-border"
-                disabled={isRunning}
+                disabled={isRunning || readingPdf}
               />
               <p className="text-xs mt-1 text-muted-foreground">
                 CASO: <span className={caseStatus === 'ATIVO' ? 'text-success' : 'text-muted-foreground'}>{caseStatus}</span>
@@ -314,7 +445,7 @@ export function DashboardClient() {
                 className="text-sm bg-input border-border cursor-default"
               />
               <p className="text-xs mt-1 text-muted-foreground">
-                CORPUS: <span className={corpusStatus === 'SEM ARQUIVO' ? 'text-muted-foreground' : 'text-success'}>{corpusStatus}</span>
+                CORPUS: <span className={corpusStatus === 'SEM ARQUIVO' || corpusStatus === 'LENDO PDF...' ? 'text-muted-foreground' : 'text-success'}>{corpusStatus}</span>
               </p>
               <input
                 ref={fileInputRef}
@@ -327,15 +458,15 @@ export function DashboardClient() {
             <div className="flex flex-col gap-2 pt-5">
               <Button
                 onClick={handleAddPdf}
-                disabled={isRunning}
+                disabled={isRunning || readingPdf}
                 className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide"
               >
-                <Upload className="w-3.5 h-3.5 mr-1.5" />
-                ADICIONAR PDF
+                {readingPdf ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+                {readingPdf ? 'LENDO PDF...' : 'ADICIONAR PDF'}
               </Button>
               <Button
                 onClick={handleClearFields}
-                disabled={isRunning}
+                disabled={isRunning || readingPdf}
                 className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide"
               >
                 <X className="w-3.5 h-3.5 mr-1.5" />
@@ -355,15 +486,18 @@ export function DashboardClient() {
                 onKeyDown={handleClientKeyDown}
                 placeholder="Digite o nome do cliente e pressione Enter"
                 className="text-sm bg-input border-border"
-                disabled={isRunning}
+                disabled={isRunning || readingPdf}
               />
             </div>
             <div>
               <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">CLASSE PROCESSUAL</label>
               <select
                 value={legalClass}
-                onChange={(e) => setLegalClass(e.target.value)}
-                disabled={isRunning}
+                onChange={(e) => {
+                  legalClassTouchedRef.current = true
+                  setLegalClass(e.target.value)
+                }}
+                disabled={isRunning || readingPdf}
                 className="w-full h-10 rounded-md bg-input border border-border px-3 text-sm"
               >
                 {LEGAL_CLASSES.map((item) => (
@@ -389,7 +523,7 @@ export function DashboardClient() {
               <div className="flex items-center">
                 <Button
                   onClick={handleExecutarRodada}
-                  disabled={isRunning}
+                  disabled={isRunning || readingPdf}
                   size="lg"
                   className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-sm tracking-wide h-full min-h-[80px] px-8"
                 >
@@ -520,6 +654,71 @@ export function DashboardClient() {
           />
         </div>
       )}
+
+      <Dialog open={metaModalOpen} onOpenChange={setMetaModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Completar dados do PDF</DialogTitle>
+            <DialogDescription>
+              Alguns dados não foram encontrados automaticamente. Informe manualmente para continuar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {metaMissing.includes('caseId') && (
+              <div>
+                <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
+                  NÚMERO DO PROCESSO
+                </label>
+                <Input
+                  value={manualCaseId}
+                  onChange={(e) => setManualCaseId(e.target.value)}
+                  placeholder="Ex: 5000001-01.2026.8.09.0000"
+                  className="font-mono text-sm"
+                  autoFocus
+                />
+              </div>
+            )}
+            {metaMissing.includes('clientName') && (
+              <div>
+                <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
+                  NOME DO CLIENTE
+                </label>
+                <Input
+                  value={manualClientName}
+                  onChange={(e) => setManualClientName(e.target.value)}
+                  placeholder="Nome da parte / cliente"
+                  className="text-sm"
+                  autoFocus={!metaMissing.includes('caseId')}
+                />
+              </div>
+            )}
+            {metaMissing.includes('legalClass') && (
+              <div>
+                <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
+                  CLASSE PROCESSUAL
+                </label>
+                <select
+                  value={manualLegalClass}
+                  onChange={(e) => setManualLegalClass(e.target.value)}
+                  className="w-full h-10 rounded-md bg-input border border-border px-3 text-sm"
+                >
+                  {LEGAL_CLASSES.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMetaModalOpen(false)}>
+              Depois
+            </Button>
+            <Button onClick={handleConfirmManualMetadata}>
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -220,7 +220,23 @@ export async function callLLM(opts: {
 const EXTRACT_PROMPT =
   'Extraia TODO o texto deste documento PDF. Retorne apenas o texto extraído, sem comentários adicionais. Mantenha a estrutura e formatação do documento original o máximo possível. Se houver tabelas, preserve-as em formato legível.'
 
-async function extractWithGemini(apiKey: string, model: string, base64: string): Promise<string> {
+const CASE_METADATA_PROMPT = `Leia este documento jurídico brasileiro e extraia SOMENTE os campos abaixo.
+Se um campo não estiver no documento, devolva string vazia. Não invente dados.
+Responda apenas com JSON:
+{
+  "numeroProcesso": "número CNJ no formato NNNNNNN-DD.AAAA.J.TT.OOOO",
+  "nomeCliente": "nome da parte autora/recorrente/impetrante/exequente/polo ativo",
+  "classeProcessual": "classe processual (ex: Apelação, Mandado de Segurança, Execução Fiscal)"
+}`
+
+async function extractWithGemini(
+  apiKey: string,
+  model: string,
+  base64: string,
+  prompt = EXTRACT_PROMPT,
+  maxTokens = 16000,
+  json = false,
+): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
   const response = await fetchWithTimeout(url, {
     method: 'POST',
@@ -231,11 +247,14 @@ async function extractWithGemini(apiKey: string, model: string, base64: string):
           role: 'user',
           parts: [
             { inline_data: { mime_type: 'application/pdf', data: base64 } },
-            { text: EXTRACT_PROMPT },
+            { text: prompt },
           ],
         },
       ],
-      generationConfig: { maxOutputTokens: 16000 },
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        ...(json ? { responseMimeType: 'application/json' } : {}),
+      },
     }),
   })
   const raw = await response.text()
@@ -244,7 +263,13 @@ async function extractWithGemini(apiKey: string, model: string, base64: string):
   return (data?.candidates?.[0]?.content?.parts ?? []).map((part: any) => part?.text ?? '').join('\n')
 }
 
-async function extractWithAnthropic(apiKey: string, model: string, base64: string): Promise<string> {
+async function extractWithAnthropic(
+  apiKey: string,
+  model: string,
+  base64: string,
+  prompt = EXTRACT_PROMPT,
+  maxTokens = 16000,
+): Promise<string> {
   const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -254,7 +279,7 @@ async function extractWithAnthropic(apiKey: string, model: string, base64: strin
     },
     body: JSON.stringify({
       model,
-      max_tokens: 16000,
+      max_tokens: maxTokens,
       messages: [
         {
           role: 'user',
@@ -263,7 +288,7 @@ async function extractWithAnthropic(apiKey: string, model: string, base64: strin
               type: 'document',
               source: { type: 'base64', media_type: 'application/pdf', data: base64 },
             },
-            { type: 'text', text: EXTRACT_PROMPT },
+            { type: 'text', text: prompt },
           ],
         },
       ],
@@ -275,7 +300,14 @@ async function extractWithAnthropic(apiKey: string, model: string, base64: strin
   return (data?.content ?? []).map((part: any) => part?.text ?? '').join('\n')
 }
 
-async function extractWithOpenAI(apiKey: string, model: string, filename: string, base64: string): Promise<string> {
+async function extractWithOpenAI(
+  apiKey: string,
+  model: string,
+  filename: string,
+  base64: string,
+  prompt = EXTRACT_PROMPT,
+  maxTokens = 16000,
+): Promise<string> {
   const response = await fetchWithTimeout('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -289,11 +321,11 @@ async function extractWithOpenAI(apiKey: string, model: string, filename: string
           role: 'user',
           content: [
             { type: 'input_file', filename, file_data: `data:application/pdf;base64,${base64}` },
-            { type: 'input_text', text: EXTRACT_PROMPT },
+            { type: 'input_text', text: prompt },
           ],
         },
       ],
-      max_output_tokens: 16000,
+      max_output_tokens: maxTokens,
     }),
   })
   const raw = await response.text()
@@ -328,4 +360,66 @@ export async function extractPdfText(opts: {
   }
 
   throw new Error(errors[0] ?? 'Nenhuma chave de IA disponível para extrair o PDF.')
+}
+
+export type LlmCaseMetadata = {
+  numeroProcesso?: string
+  nomeCliente?: string
+  classeProcessual?: string
+}
+
+function parseCaseMetadataJson(raw: string): LlmCaseMetadata {
+  try {
+    const data = JSON.parse(unwrapJsonish(raw))
+    return {
+      numeroProcesso: typeof data?.numeroProcesso === 'string' ? data.numeroProcesso.trim() : '',
+      nomeCliente: typeof data?.nomeCliente === 'string' ? data.nomeCliente.trim() : '',
+      classeProcessual: typeof data?.classeProcessual === 'string' ? data.classeProcessual.trim() : '',
+    }
+  } catch {
+    return {}
+  }
+}
+
+export async function inferCaseMetadataFromText(text: string): Promise<LlmCaseMetadata> {
+  const raw = await callLLM({
+    json: true,
+    maxTokens: 400,
+    label: 'Metadados do PDF',
+    system: CASE_METADATA_PROMPT,
+    user: text.slice(0, 12_000),
+  })
+  return parseCaseMetadataJson(raw)
+}
+
+export async function extractPdfCaseMetadata(opts: {
+  base64: string
+  filename: string
+  provider?: string | null
+}): Promise<LlmCaseMetadata> {
+  const order: LlmProvider[] = ['gemini', 'anthropic', 'openai']
+  const preferred = opts.provider ? normalizeProvider(opts.provider) : firstConfiguredProvider()
+  const sequence = [preferred, ...order.filter((id) => id !== preferred)]
+  const errors: string[] = []
+
+  for (const provider of sequence) {
+    const apiKey = getProviderApiKey(provider)
+    if (!apiKey) continue
+    const model = getProviderModel(provider)
+    try {
+      let text = ''
+      if (provider === 'gemini') {
+        text = await extractWithGemini(apiKey, model, opts.base64, CASE_METADATA_PROMPT, 600, true)
+      } else if (provider === 'anthropic') {
+        text = await extractWithAnthropic(apiKey, model, opts.base64, CASE_METADATA_PROMPT, 600)
+      } else {
+        text = await extractWithOpenAI(apiKey, model, opts.filename, opts.base64, CASE_METADATA_PROMPT, 600)
+      }
+      return parseCaseMetadataJson(text)
+    } catch (error: any) {
+      errors.push(`${provider}: ${String(error?.message ?? error)}`)
+    }
+  }
+
+  throw new Error(errors[0] ?? 'Nenhuma chave de IA disponível para ler o PDF.')
 }

@@ -109,3 +109,32 @@ function resolveAlias(justice: string, tribunal: string): string | null {
 export function datajudApiKey(): string {
   return (process.env.DATAJUD_API_KEY ?? '').trim()
 }
+
+export async function fetchDatajudProcess(numero: string): Promise<Record<string, unknown> | null> {
+  const apiKey = datajudApiKey()
+  const parsed = parseCnj(numero)
+  if (!apiKey || !parsed) return null
+
+  const { fetchWithTimeout } = await import('@/lib/safe-url')
+  const response = await fetchWithTimeout(
+    `https://api-publica.datajud.cnj.jus.br/api_publica_${parsed.alias}/_search`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `APIKey ${apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        query: { match: { numeroProcesso: parsed.digits } },
+        size: 1,
+      }),
+    },
+    12_000
+  )
+  if (!response.ok) return null
+
+  const payload = await response.json()
+  const hit = payload?.hits?.hits?.[0]?._source
+  return hit && typeof hit === 'object' ? (hit as Record<string, unknown>) : null
+}
