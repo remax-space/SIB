@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useMounted } from '@/components/client-only'
+import { ClientOnly } from '@/components/client-only'
 import { applyTheme, type SibTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
@@ -38,8 +38,23 @@ function ThemeIcon({ resolved }: { resolved?: string }) {
   )
 }
 
-export function ThemeToggle({ className }: { className?: string }) {
-  const mounted = useMounted()
+function ThemeToggleFallback({ className }: { className?: string }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className={cn('shrink-0', className)}
+      aria-label="Alternar tema"
+      title="Alternar tema"
+      disabled
+    >
+      <ThemeIcon />
+      <span className="sr-only">Alternar tema</span>
+    </Button>
+  )
+}
+
+function ThemeToggleMenu({ className }: { className?: string }) {
   const { theme, setTheme, resolvedTheme, systemTheme } = useTheme()
 
   const resolvedLabel =
@@ -56,18 +71,18 @@ export function ThemeToggle({ className }: { className?: string }) {
           variant="ghost"
           size="icon-sm"
           className={cn('shrink-0', className)}
-          aria-label={mounted ? resolvedLabel : 'Alternar tema'}
-          title={mounted ? resolvedLabel : 'Alternar tema'}
+          aria-label={resolvedLabel}
+          title={resolvedLabel}
         >
-          <ThemeIcon resolved={mounted ? resolvedTheme : undefined} />
+          <ThemeIcon resolved={resolvedTheme} />
           <span className="sr-only">Alternar tema</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         {OPTIONS.map(({ value, label, icon: Icon }) => {
-          const active = mounted && theme === value
+          const active = theme === value
           const hint =
-            value === 'system' && mounted
+            value === 'system'
               ? resolvedTheme === 'dark'
                 ? 'escuro agora'
                 : 'claro agora'
@@ -89,5 +104,13 @@ export function ThemeToggle({ className }: { className?: string }) {
         })}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+export function ThemeToggle({ className }: { className?: string }) {
+  return (
+    <ClientOnly fallback={<ThemeToggleFallback className={className} />}>
+      <ThemeToggleMenu className={className} />
+    </ClientOnly>
   )
 }
