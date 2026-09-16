@@ -6,16 +6,19 @@ import { Card, CardContent } from '@/components/ui/card'
 import { PageHeader } from '@/components/layouts/page-header'
 import { FileSearch, FileText, CheckCircle, AlertCircle, Clock, Eye } from 'lucide-react'
 import { READ_STATUSES } from '@/lib/constants'
+import { DocumentConversation } from '@/components/document-conversation'
+import { StatusExplanation } from '@/components/status-explanation'
 
 export function TriagemClient() {
   const [docs, setDocs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetch('/api/documents')
-      .then((res) => res.json())
+      .then((res) => { if (!res.ok) throw new Error('Não foi possível carregar os documentos. Recarregue a página.'); return res.json() })
       .then((data) => setDocs(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch((error) => setError(error.message))
       .finally(() => setLoading(false))
   }, [])
 
@@ -35,6 +38,7 @@ export function TriagemClient() {
         description="Visão geral do corpus documental e status de leitura"
       />
 
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando documentos...</p>
       ) : docs.length === 0 ? (
@@ -47,7 +51,7 @@ export function TriagemClient() {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
@@ -55,6 +59,7 @@ export function TriagemClient() {
                   <th className="text-left py-2.5 px-4 text-xs text-muted-foreground font-medium">Processo</th>
                   <th className="text-left py-2.5 px-4 text-xs text-muted-foreground font-medium">Páginas</th>
                   <th className="text-left py-2.5 px-4 text-xs text-muted-foreground font-medium">Status</th>
+                  <th className="text-left py-2.5 px-4 text-xs text-muted-foreground font-medium">Consulta documental</th>
                 </tr>
               </thead>
               <tbody>
@@ -70,7 +75,7 @@ export function TriagemClient() {
                       </td>
                       <td className="py-2 px-4 text-xs font-mono text-primary">
                         {doc.caseDbId ? (
-                          <Link href={`/casos/${doc.caseDbId}`} className="hover:underline">{doc.caseName}</Link>
+                          <Link href={`/casos/${doc.caseDbId}/conversa`} className="hover:underline" title="Abrir conversa com as IAs deste processo">{doc.caseName}</Link>
                         ) : (
                           doc.caseName
                         )}
@@ -79,9 +84,10 @@ export function TriagemClient() {
                       <td className="py-2 px-4">
                         <div className="flex items-center gap-1.5">
                           {getStatusIcon(doc.readStatus)}
-                          <span className={`text-xs ${statusDef?.color?.split(' ')[1] ?? ''}`}>{statusDef?.label ?? doc.readStatus}</span>
+                          <span className={statusDef?.color?.split(' ')[1] ?? ''}><StatusExplanation status={doc.readStatus} label={statusDef?.label ?? doc.readStatus} /></span>
                         </div>
                       </td>
+                      <td className="py-2 px-4"><DocumentConversation id={doc.id} filename={doc.filename} onRead={(readStatus, pageCount) => setDocs((previous) => previous.map((item) => item.id === doc.id ? { ...item, readStatus, pageCount } : item))} /></td>
                     </tr>
                   )
                 })}

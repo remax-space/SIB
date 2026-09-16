@@ -12,6 +12,7 @@ import { ArrowLeft, Upload, FileText, Brain, Trash2, Eye, RefreshCw, Plus } from
 import { CASE_STATUSES, READ_STATUSES, ANALYSIS_STATUSES, getIcpClass } from '@/lib/constants'
 import { toast } from 'sonner'
 import { putUploadedFile } from '@/lib/upload-file'
+import { StatusExplanation } from '@/components/status-explanation'
 
 export function CaseDetailClient({ caseId }: { caseId: string }) {
   const [caseData, setCaseData] = useState<any>(null)
@@ -155,7 +156,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Número Processual</p>
-                  <p className="font-mono text-sm">{caseData?.caseId}</p>
+                  <Link href={`/casos/${caseId}/conversa`} className="font-mono text-sm text-primary hover:underline" title="Abrir conversa com as IAs deste processo">{caseData?.caseId}</Link>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Cliente</p>
@@ -239,8 +240,8 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span>{((doc?.fileSize ?? 0) / 1024).toFixed(0)} KB</span>
                                 {doc?.pageCount && <span>• {doc.pageCount} pág.</span>}
-                                <span className={`px-1.5 py-0.5 rounded-sm ${readDef?.color ?? ''}`}>
-                                  {readDef?.label ?? doc?.readStatus}
+                                <span className={`rounded-sm ${readDef?.color ?? ''}`}>
+                                  <StatusExplanation status={doc?.readStatus} label={readDef?.label ?? doc?.readStatus} />
                                 </span>
                               </div>
                               <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">SHA-256: {doc?.sha256?.substring(0, 16)}...</p>

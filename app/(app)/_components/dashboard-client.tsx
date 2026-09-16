@@ -11,6 +11,8 @@ import { Upload, X, Play, AlertTriangle, Copy, Check, Loader2 } from 'lucide-rea
 import { toast } from 'sonner'
 import { AGENTS, DEFAULT_MISSION, LEGAL_CLASSES, SIB_VERSION } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
+import { ConversationTable } from '@/components/conversation-table'
+import { StatusExplanation } from '@/components/status-explanation'
 import { putUploadedFile } from '@/lib/upload-file'
 import { extractCnjFromText, type PdfCaseMetadataField } from '@/lib/pdf-case-metadata'
 import {
@@ -55,6 +57,7 @@ export function DashboardClient() {
   const [isRunning, setIsRunning] = useState(false)
   const [agents, setAgents] = useState<Record<string, AgentResult>>(emptyAgents)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
+  const [analysisCompleted, setAnalysisCompleted] = useState(false)
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null)
   const [pendencias, setPendencias] = useState<string[]>([])
   const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
@@ -219,6 +222,7 @@ export function DashboardClient() {
     setClientStatus('PENDENTE')
     setAgents(emptyAgents())
     setAnalysisId(null)
+    setAnalysisCompleted(false)
     setCreatedCaseId(null)
     setPendencias([])
     setIsRunning(false)
@@ -252,6 +256,7 @@ export function DashboardClient() {
 
     const classDef = LEGAL_CLASSES.find((item) => item.value === legalClass)
     setIsRunning(true)
+    setAnalysisCompleted(false)
     setAgents(Object.fromEntries(
       AGENTS.map((agent) => [agent.key, { status: agent.key === 'basile' ? 'running' : 'waiting', content: '' }])
     ))
@@ -391,6 +396,13 @@ export function DashboardClient() {
           }
         }
       }
+      if (newAnalysisId) {
+        const completedResponse = await fetch(`/api/analysis/${newAnalysisId}`)
+        if (completedResponse.ok) {
+          const completed = await completedResponse.json()
+          setAnalysisCompleted(completed.status === 'CONCLUIDO')
+        }
+      }
     } catch (err: any) {
       console.error('Execution error:', err)
       updateAgent('basile', (prev) =>
@@ -433,7 +445,7 @@ export function DashboardClient() {
                 disabled={isRunning || readingPdf}
               />
               <p className="text-xs mt-1 text-muted-foreground">
-                CASO: <span className={caseStatus === 'ATIVO' ? 'text-success' : 'text-muted-foreground'}>{caseStatus}</span>
+                CASO: <span className={caseStatus === 'ATIVO' ? 'text-success' : 'text-muted-foreground'}><StatusExplanation status={caseStatus} label={caseStatus} detail={caseStatus === 'PENDENTE' ? 'O processo ainda não foi cadastrado. Informe o número processual e conclua o preenchimento para ativá-lo.' : undefined} /></span>
               </p>
             </div>
             <div>
@@ -505,7 +517,7 @@ export function DashboardClient() {
                 ))}
               </select>
               <p className="text-xs mt-1 text-muted-foreground">
-                CLIENTE/CAIXA: <span className={clientStatus === 'PENDENTE' ? 'text-muted-foreground' : 'text-success'}>{clientStatus}</span>
+                CLIENTE/CAIXA: <span className={clientStatus === 'PENDENTE' ? 'text-muted-foreground' : 'text-success'}><StatusExplanation status={clientStatus} label={clientStatus} detail={clientStatus === 'PENDENTE' ? 'O cliente ainda não foi cadastrado. Digite o nome no campo acima e pressione Enter para cadastrá-lo.' : undefined} /></span>
               </p>
             </div>
           </div>
@@ -654,6 +666,8 @@ export function DashboardClient() {
           />
         </div>
       )}
+
+      {analysisCompleted && analysisId && <ConversationTable key={analysisId} analysisId={analysisId} />}
 
       <Dialog open={metaModalOpen} onOpenChange={setMetaModalOpen}>
         <DialogContent className="sm:max-w-md">

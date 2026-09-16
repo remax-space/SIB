@@ -14,6 +14,8 @@ import { ArrowLeft, Download, Loader2, AlertTriangle } from 'lucide-react'
 import { ANALYSIS_STATUSES, AGENTS, getIcpClass, getIcpLabel } from '@/lib/constants'
 import { formatAgentOutput, normalizeAgentResult } from '@/lib/format-agent-output'
 import { JurisprudenciaResult } from '@/components/jurisprudencia-result'
+import { ConversationTable } from '@/components/conversation-table'
+import { StatusExplanation } from '@/components/status-explanation'
 
 export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; analysisId: string }) {
   const router = useRouter()
@@ -126,8 +128,8 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
       {/* Status + ICP header */}
       <div className="flex flex-wrap items-center gap-4">
-        <span className={`text-xs px-3 py-1.5 rounded-full ${statusDef?.color ?? ''}`}>
-          {statusDef?.label ?? analysis?.status}
+        <span className={`rounded-full ${statusDef?.color ?? ''}`}>
+          <StatusExplanation status={analysis?.status} label={statusDef?.label ?? analysis?.status} />
         </span>
         {analysis?.status === 'EM_ANDAMENTO' && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -159,6 +161,8 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
           </CardContent>
         </Card>
       )}
+
+      {analysis.status === 'CONCLUIDO' && <ConversationTable key={analysisId} analysisId={analysisId} initialTurns={analysis.conversation ?? []} />}
 
       {/* Agent Results Tabs */}
       {analysis?.status !== 'PENDENTE' && (
