@@ -45,7 +45,7 @@ export type Research = {
   state: ResearchState; authorizedAt?: number; leaseUntil?: number; finishedAt?: number;
   durationMs?: number; resultPath?: string; resultHash?: string; validUntil?: number;
   reusedFrom?: string; dispatchedAt?: number; cancelRequestedAt?: number;
-  errorCode?: string; consumption?: number | null; remoteId?: string;
+  errorCode?: string; errorDetail?: string; consumption?: number | null; remoteId?: string;
   budgetKeys?: string[]; idempotencyKey: string;
 }
 export type Evidence = { id: string; caseId: string; analysisId: string; createdBy: string; createdAt: number; contextVersion: string; sourceIds: string[]; researchIds: string[]; allowAfterCutoff: boolean; acknowledgeStale: boolean; sources: Source[]; criteria: { researchId: string; objective: string; stance: Plan['stance']; requiredTerms: string; exclusions: string }[] }

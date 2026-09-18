@@ -23,8 +23,8 @@ const ESTADUAL: Record<string, string> = {
   '22': 'tjro',
   '23': 'tjrr',
   '24': 'tjsc',
-  '25': 'tjsp',
-  '26': 'tjse',
+  '25': 'tjse',
+  '26': 'tjsp',
   '27': 'tjto',
 }
 

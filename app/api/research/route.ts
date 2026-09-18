@@ -1,3 +1,4 @@
+import { fullTextDefaults } from '@/lib/research/full-text-defaults'
 import { clientResearch, publicResearchResult, publicEvidence } from '@/lib/research/public'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -30,7 +31,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ research: clientResearch(record), result: publicResearchResult(await readResearchResult(record)) })
     }
     const integrated = (await listEvidence(analysisId, String(ctx.analysis.caseId))).map(item => ({ id: item.id, createdAt: item.createdAt, sources: item.sources.map(source => ({ id: source.id, title: source.title })) }))
-    return NextResponse.json({ integrated, availability: await researchAvailability(), caseId: ctx.analysis.caseId, cutoffDate: ctx.caseData.cutoffDate ?? null, suggestion: String(ctx.caseData.objective ?? ''), completed: ctx.analysis.status === 'CONCLUIDO', canReconcile: (session.user as { role?: string } | undefined)?.role === 'ADMIN', history: (await listResearch(analysisId)).map(clientResearch), limitations: ['Conclusão da análise não comprova leitura integral. Confira a cobertura documental do Mestre e do Orientador.'] })
+    const history = await listResearch(analysisId)
+    return NextResponse.json({ fullTextDefaults: fullTextDefaults(ctx.caseData, ctx.docs, history), integrated, availability: await researchAvailability(), caseId: ctx.analysis.caseId, cutoffDate: ctx.caseData.cutoffDate ?? null, suggestion: String(ctx.caseData.objective ?? ''), completed: ctx.analysis.status === 'CONCLUIDO', canReconcile: (session.user as { role?: string } | undefined)?.role === 'ADMIN', history: history.map(clientResearch), limitations: ['Conclusão da análise não comprova leitura integral. Confira a cobertura documental do Mestre e do Orientador.'] })
   } catch (error) { return researchHttpError(error) }
 }
 export async function POST(request: NextRequest) {

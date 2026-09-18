@@ -28,7 +28,7 @@ export function clientResearch(record: Research | Record<string, unknown>) {
   return {
     id: r.id, state: r.state === 'running' && (r.leaseUntil ?? 0) < Date.now() ? 'remote_uncertain' as const : r.state,
     createdAt: r.createdAt, cancelRequestedAt: r.cancelRequestedAt, consumption: r.consumption,
-    reusedFrom: Boolean(r.reusedFrom), dispatched: Boolean(r.dispatchedAt), cacheExpired: r.validUntil !== undefined && r.validUntil < Date.now(), submitted,
+    reusedFrom: Boolean(r.reusedFrom), dispatched: Boolean(r.dispatchedAt), cacheExpired: r.validUntil !== undefined && r.validUntil < Date.now(), errorDetail: typeof r.errorDetail === 'string' ? r.errorDetail.slice(0, 800) : undefined, submitted,
     plan: { tool: p.tool, query: p.query, objective: p.objective, stance: p.stance, requiredTerms: p.requiredTerms, exclusions: p.exclusions, refresh: p.refresh },
   }
 }

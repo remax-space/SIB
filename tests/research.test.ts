@@ -180,6 +180,25 @@ test('cliques concorrentes, planos idênticos e cache válido não duplicam cham
     assert.equal(h.blobs.size, 1)
   } finally { h.dispose() }
 })
+
+test('nova confirmação do mesmo operador abre a consulta idêntica em andamento', async () => {
+  const h = await harness()
+  try {
+    const active = await h.route.prepareResearch(input, 'user'), duplicate = await h.route.prepareResearch(input, 'user')
+    const current = h.records.get('legalResearch/' + active.research.id) as Research
+    current.state = 'running'; current.leaseUntil = Date.now() + 60_000
+    // The search context changes when a draft is added to the history. Model
+    // the production condition: an earlier request owns this exact lock.
+    current.fingerprint = (h.records.get('legalResearch/' + duplicate.research.id) as Research).fingerprint
+    h.records.set('legalResearch/' + active.research.id, current)
+    h.records.set(`legalResearchLocks/${current.fingerprint}`, { researchId: current.id })
+
+    const result = await h.route.confirmResearch(duplicate.research.id, duplicate.approvalToken, 'user')
+    assert.equal(result.id, active.research.id)
+    assert.equal(result.state, 'running')
+    assert.equal(h.calls.length, 0)
+  } finally { h.dispose() }
+})
 test('mudança de missão ou documentos não reutiliza automaticamente snapshot de outro contexto', async () => {
   const h = await harness()
   try {
@@ -199,7 +218,9 @@ test('falha após envio conserva reserva e impede repetição silenciosa', async
     assert.equal(r.state, 'remote_uncertain'); assert.equal(r.consumption, null)
     await h.route.confirmResearch(a.research.id, a.approvalToken, 'user')
     const b = await h.route.prepareResearch(input, 'user')
-    await assert.rejects(h.route.confirmResearch(b.research.id, b.approvalToken, 'user'), /REMOTE_EXECUTION_UNCERTAIN/)
+    const existing = await h.route.confirmResearch(b.research.id, b.approvalToken, 'user')
+    assert.equal(existing.id, r.id)
+    assert.equal(existing.state, 'remote_uncertain')
     assert.equal(h.calls.length, 1)
     assert.equal([...h.records.entries()].find(([k]) => k.startsWith('legalResearchBudgets/shared-'))?.[1].reserved, 1)
   } finally { h.dispose() }

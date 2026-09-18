@@ -101,7 +101,13 @@ export async function claimResearch(id: string, userId: string, approvalHash: st
     const p = previous?.data() as Research | undefined
     const sourceCaseState = p ? await tx.get(lifecycle(p.caseId)) : null
     if (sourceCaseState?.data()?.deleting) throw new ResearchError('CASE_DELETION_IN_PROGRESS')
-    if (p && (p.state === 'running' || p.state === 'remote_uncertain')) throw new ResearchError(p.state === 'running' && (p.leaseUntil ?? 0) > now ? 'RESEARCH_IN_PROGRESS' : 'REMOTE_EXECUTION_UNCERTAIN')
+    if (p && (p.state === 'running' || p.state === 'remote_uncertain')) {
+      // A repeated confirmation from the same operator opens the existing
+      // execution, including an uncertain one. That prevents a second remote
+      // call while keeping executions owned by other users private.
+      if (p.userId === userId && (p.state === 'remote_uncertain' || (p.leaseUntil ?? 0) > now)) return { record: p, execute: false }
+      throw new ResearchError(p.state === 'running' && (p.leaseUntil ?? 0) > now ? 'RESEARCH_IN_PROGRESS' : 'REMOTE_EXECUTION_UNCERTAIN')
+    }
     if (p?.resultPath && (p.validUntil ?? 0) > now && !r.plan.refresh && ['success', 'empty', 'partial'].includes(p.state)) {
       const reused: Research = { ...r, state: p.state, authorizedAt: now, finishedAt: now, reusedFrom: p.id, resultPath: p.resultPath, resultHash: p.resultHash, validUntil: p.validUntil, consumption: 0 }
       tx.update(ref, reused)

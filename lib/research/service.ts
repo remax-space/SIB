@@ -106,7 +106,7 @@ export async function executeClaimedResearch(record: Research, adapter: Research
   } catch (error) {
     const code = error instanceof ResearchError ? error.code : controller.signal.aborted ? 'TRANSPORT_ABORTED' : 'INVALID_RESPONSE_OR_PERSISTENCE_FAILURE'
     const state = !dispatched && controller.signal.aborted ? (controller.signal.reason?.message === 'DEADLINE' ? 'timeout' : 'cancelled') : dispatched && !(error instanceof ResearchError && !error.uncertain) ? 'remote_uncertain' : 'error'
-    await deps.finishResearch(record.id, { state, errorCode: code, durationMs: Date.now() - started, consumption: dispatched ? null : 0 })
+    await deps.finishResearch(record.id, { state, errorCode: code, ...(error instanceof ResearchError && error.detail ? { errorDetail: error.detail } : {}), durationMs: Date.now() - started, consumption: dispatched ? null : 0 })
   } finally { clearTimeout(timer); clearInterval(poll); externalSignal?.removeEventListener('abort', abort) }
 }
 
@@ -124,7 +124,10 @@ export async function confirmResearch(id: string, token: string, userId: string,
   if (claim.execute && Date.now() >= deadline) {
     await repo.finishResearch(id, { state: 'timeout', errorCode: 'DEADLINE_BEFORE_DISPATCH', consumption: 0 })
   } else if (claim.execute) await executeClaimedResearch(claim.record, cfg.adapter, repo, signal, deadline - Date.now())
-  return publicResearch((await repo.getResearch(id))!)
+  // claimResearch may return this operator's identical request that is already
+  // running. Return that record so the UI can follow it instead of treating a
+  // repeat confirmation as a conflict.
+  return publicResearch((await repo.getResearch(claim.record.id))!)
 }
 
 export async function selectEvidence(input: unknown, userId: string): Promise<Evidence> {

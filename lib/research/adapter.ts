@@ -9,7 +9,7 @@ export const LEGAW_ACTIVATION_BLOCKERS = [
   'Confirmar suporte contratual ao uso server-to-server da API REST oficial e obter semântica autorizada para cancelamento, idempotência, rate limits, custos e retenção; o OpenAPI público 0.3.0 valida requests e respostas estruturadas de busca/citação, mas descreve inteiro teor sem schema completo e não cobre esses pontos operacionais.',
 ]
 export class ResearchError extends Error {
-  constructor(public code: string, public status = 409, public uncertain = false) { super(code) }
+  constructor(public code: string, public status = 409, public uncertain = false, public detail?: string) { super(code) }
 }
 export interface ResearchAdapter {
   execute(plan: Plan, parameters: Record<string, unknown>, signal: AbortSignal): Promise<Result>

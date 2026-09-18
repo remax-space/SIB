@@ -14,6 +14,24 @@ function statusError(status: number) {
   return new ResearchError(codes[status] ?? 'LEGAW_HTTP_FAILURE', status === 429 ? 429 : 502, status >= 500)
 }
 
+function toolErrorDetail(result: { structuredContent?: unknown; content?: unknown }) {
+  const summary = (value: unknown) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800) : undefined
+  const message = (value: unknown) => value && typeof value === 'object'
+    ? summary((value as Record<string, unknown>).message_to_user) || summary((value as Record<string, unknown>).message) || summary((value as Record<string, unknown>).error)
+    : undefined
+  const structured = message(result.structuredContent)
+  if (structured) return structured
+  for (const block of Array.isArray(result.content) ? result.content : []) {
+    if (!block || typeof block !== 'object' || (block as { type?: unknown }).type !== 'text') continue
+    const text = (block as { text?: unknown }).text
+    if (typeof text !== 'string') continue
+    try { const parsed = JSON.parse(text); const parsedMessage = message(parsed); if (parsedMessage) return parsedMessage } catch { /* Plain text is safe to show as untrusted provider feedback. */ }
+    const plain = summary(text)
+    if (plain) return plain
+  }
+  return undefined
+}
+
 /** One SDK session per authorized operation; no reconnect, OAuth retry or tool replay. */
 async function session<T>(operation: (client: Client) => Promise<T>, signal: AbortSignal) {
   const key = mcpKey()
@@ -78,7 +96,7 @@ export const legawMcpAdapter: ResearchAdapter = {
       const validation = new AjvJsonSchemaValidator().getValidator(tool.inputSchema)(parameters)
       if (!validation.valid) throw new ResearchError('LEGAW_MCP_SCHEMA_CHANGED', 422)
       const result = await client.callTool({ name: plan.tool, arguments: parameters }, undefined, { signal, timeout: 55_000 })
-      if (result.isError) throw new ResearchError('LEGAW_MCP_TOOL_ERROR', 502, true)
+      if (result.isError) throw new ResearchError('LEGAW_MCP_TOOL_ERROR', 502, true, toolErrorDetail(result as unknown as { structuredContent?: unknown; content?: unknown }))
       // Some Legaw tools return JSON followed by an instruction block. Only data
       // matching the chosen tool is normalized; other text is retained in raw.
       const expected = plan.tool === 'ler_inteiro_teor' ? 'conteudo' : plan.tool === 'conferir_citacoes' ? 'citacoes' : 'resultados'
