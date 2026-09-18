@@ -1,3 +1,4 @@
+import { hydrateResults } from './analyses'
 import { getDb } from '@/lib/firebase/admin'
 import { serializeDoc } from '@/lib/firebase/serialize'
 import { listCases } from './cases'
@@ -30,7 +31,7 @@ export async function getDashboardStats() {
 
   const recentAnalyses = await Promise.all(
     recentAnalysisRows.docs.map(async (doc) => {
-      const analysis = serializeDoc(doc.id, doc.data()) as Record<string, any>
+      const analysis = serializeDoc(doc.id, await hydrateResults(doc.data())) as Record<string, any>
       const caseSnap = analysis.caseId ? await getDb().collection('cases').doc(String(analysis.caseId)).get() : null
       const caseData = caseSnap?.exists ? serializeDoc(caseSnap.id, caseSnap.data()) : null
       return {

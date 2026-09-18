@@ -1,7 +1,7 @@
 'use client'
 
 import { ConversationTable } from '@/components/conversation-table'
-import type { Evidence } from '@/lib/research/contracts'
+import type { PublicEvidence as Evidence } from '@/lib/research/public'
 
 import { LegalResearch } from '@/components/legal-research'
 import { LegawConnection } from '@/components/legaw-connection'

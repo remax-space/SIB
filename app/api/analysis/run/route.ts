@@ -9,11 +9,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAnalysis, getAnalysisById, getCaseById, getDocumentsWithText, updateAnalysis } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
+import { composeMission, getBasileInstructions, INTEGRITY_RULES } from '@/lib/basile-settings';
 import { DEFAULT_MISSION } from '@/lib/constants';
 import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm';
 import { prepareSources, validateDocumentSelection, DocumentSelectionError } from '@/lib/document-sources';
 import { readStoredFile } from '@/lib/storage';
-import { reviewDocuments } from '@/lib/document-review';
+import { reviewDocuments, verifyEvidence } from '@/lib/document-review';
 import {
   getBasilePrompt,
   getAdvogadoPrompt,
@@ -61,11 +62,16 @@ export async function POST(request: NextRequest) {
   }
   try {
     const body = await request.json();
+    if (body?.sourceAnalysisId) {
+      const origin = typeof body.sourceAnalysisId === 'string' && !body.sourceAnalysisId.includes('/') ? await getAnalysisById(body.sourceAnalysisId) : null;
+      if (!origin || origin.caseId !== body.caseId) return NextResponse.json({ error: 'Análise de origem indisponível.' }, { status: 404 });
+      Object.assign(body, { documentIds: origin.documentIds, missionLiteral: origin.analysisRequest ?? (origin.missionLiteral === DEFAULT_MISSION ? '' : origin.missionLiteral), authorizedProduct: origin.authorizedProduct, provider: origin.provider, runMode: origin.runMode });
+    }
     const { caseId, authorizedProduct, provider, runMode, documentIds } = body ?? {};
-    // Missão padrão do Método Basile quando o operador não digita uma missão própria
-    const missionLiteral = (body?.missionLiteral && String(body.missionLiteral).trim())
-      ? String(body.missionLiteral).trim()
-      : DEFAULT_MISSION;
+    const instructions = await getBasileInstructions();
+    const analysisRequest = typeof body?.missionLiteral === 'string' ? body.missionLiteral.trim() : '';
+    if (analysisRequest.length > 6000) return NextResponse.json({ error: 'Use até 6.000 caracteres no objetivo.' }, { status: 400 });
+    const missionLiteral = composeMission(instructions.content, analysisRequest);
 
     if (!caseId || !documentIds?.length) {
       return new Response(
@@ -92,17 +98,20 @@ export async function POST(request: NextRequest) {
     const evidence = await loadEvidence(body?.evidenceId, caseId);
     if (evidence) {
       const origin = await getAnalysisById(evidence.analysisId);
-      if (!origin || origin.missionLiteral !== missionLiteral || JSON.stringify(origin.documentIds) !== JSON.stringify(documentIds)) throw new ResearchError('CONTEXT_CHANGED');
+      const sameMission = origin && (origin.instructionsVersion
+        ? origin.missionLiteral === missionLiteral
+        : origin.missionLiteral === analysisRequest || (origin.missionLiteral === DEFAULT_MISSION && !analysisRequest));
+      if (!sameMission || JSON.stringify(origin?.documentIds) !== JSON.stringify(documentIds)) throw new ResearchError('CONTEXT_CHANGED');
     }
     const deadline = Date.now() + 270_000;
     const sources = await prepareSources(documents, readStoredFile);
     const unavailable = sources.find(source => !source.pdf || !source.pageCount);
-    if (unavailable) throw new DocumentSelectionError(`Não foi possível ler ${unavailable.filename}: ${unavailable.limitation ?? 'PDF sem páginas'}. Corrija o documento antes de iniciar a análise.`);
+    if (unavailable) throw new DocumentSelectionError(`Não foi possível ler ${unavailable.filename}. Confira se o PDF abre corretamente e envie-o novamente.`);
     const sourceManifest = JSON.stringify(sources.map(({ id, filename, sha256, pageCount, limitation }) => ({ id, filename, sha256, pageCount, limitation })));
     const timedLLM: typeof callLLM = (options) => {
       const remaining = deadline - Date.now() - 5000;
       if (remaining < 1000) throw new Error('Tempo da análise esgotado; resultados anteriores preservados.');
-      const prompt = withEvidence({ system: options.system, user: options.user }, evidence);
+      const prompt = withEvidence({ system: `${options.system}\n${INTEGRITY_RULES}`, user: options.user }, evidence);
       return callLLM({ ...options, ...prompt, timeoutMs: Math.min(60_000, remaining) });
     };
 
@@ -120,6 +129,9 @@ export async function POST(request: NextRequest) {
       caseId,
       jobId,
       missionLiteral,
+      instructionsVersion: instructions.version,
+      analysisRequest,
+      documentSources: sources.map(s => ({ id: s.id, filename: s.filename, pageCount: s.pageCount ?? null })),
       authorizedProduct: authorizedProduct ?? null,
       provider: providerKey,
       modelUsed: model,
@@ -158,6 +170,7 @@ export async function POST(request: NextRequest) {
             const reason = coverage?.paginas?.find(page => page.limitacao)?.limitacao;
             throw new Error(`Nenhuma página do PDF pôde ser processada.${reason ? ` Motivo: ${reason}` : ' Consulte as limitações documentais e verifique o provedor de IA.'}`);
           }
+          if (!needsDocumentReview) basileResult.evidencias = verifyEvidence(basileResult.evidencias, sources);
           const basileRaw = JSON.stringify(basileResult);
           if (needsDocumentReview) corpusText = `AVALIAÇÃO DOCUMENTAL DO BASILE (interpretação, não transcrição integral do PDF):\n${JSON.stringify(comparisonResult(basileResult))}`;
           if (evidence) basileResult.fontes_juridicas = auditResearchCitations(basileRaw, evidence);
@@ -179,6 +192,7 @@ export async function POST(request: NextRequest) {
           const advPrompt = getAdvogadoPrompt(basileRaw, corpusText);
           const advRaw = await timedLLM({ provider: providerKey, system: advPrompt.system, user: advPrompt.user, model, json: true, label: 'ADVOGADO DO DIABO' });
           const advocadoResult = parseJSON(advRaw);
+          advocadoResult.evidencias = verifyEvidence(advocadoResult.evidencias, sources);
           if (evidence) advocadoResult.fontes_juridicas = auditResearchCitations(advRaw, evidence);
           await updateAnalysis(analysis.id, { advocadoResult });
           sendEvent({ status: 'agent_complete', agent: 'advocado', label: 'ADVOGADO DO DIABO' });
@@ -191,6 +205,7 @@ export async function POST(request: NextRequest) {
           const cabPrompt = getCabecaPrompt(basileRaw, advRaw, corpusText);
           const cabRaw = await timedLLM({ provider: providerKey, system: cabPrompt.system, user: cabPrompt.user, model, json: true, label: 'CABEÇA DO JUIZ' });
           const cabecaResult = parseJSON(cabRaw);
+          cabecaResult.evidencias = verifyEvidence(cabecaResult.evidencias, sources);
           if (evidence) cabecaResult.fontes_juridicas = auditResearchCitations(cabRaw, evidence);
           await updateAnalysis(analysis.id, { cabecaResult });
           sendEvent({ status: 'agent_complete', agent: 'cabeca', label: 'CABEÇA DO JUIZ' });
@@ -203,8 +218,10 @@ export async function POST(request: NextRequest) {
           const audPrompt = getAuditorPrompt(basileRaw, advRaw, cabRaw);
           const audRaw = await timedLLM({ provider: providerKey, system: audPrompt.system, user: audPrompt.user, model, json: true, label: 'AUDITOR DOCUMENTAL' });
           const auditorResult = parseJSON(audRaw);
+          auditorResult.evidencias = verifyEvidence(auditorResult.evidencias, sources);
           if (evidence) auditorResult.fontes_juridicas = auditResearchCitations(audRaw, evidence);
-          const icpScore = auditorResult?.icp_basile?.total ?? null;
+          const score = auditorResult?.icp_basile?.total;
+          const icpScore = typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
           await updateAnalysis(analysis.id, { auditorResult, icpScore });
           sendEvent({ status: 'agent_complete', agent: 'auditor', label: 'AUDITOR DOCUMENTAL', icpScore });
 
@@ -235,7 +252,7 @@ export async function POST(request: NextRequest) {
         } catch (err: any) {
           console.error('Analysis pipeline error:', err);
           await updateAnalysis(analysis.id, { status: 'ERRO', exitCode: 10, errorDetail: String(err?.message ?? err), currentAgent: null });
-          sendEvent({ status: 'error', message: String(err?.message ?? 'Erro desconhecido') });
+          sendEvent({ status: 'error', message: 'Não foi possível concluir a análise. Os resultados disponíveis foram preservados. Confira-os e tente novamente.' });
         } finally {
           try { controller.close(); } catch { /* already closed */ }
         }

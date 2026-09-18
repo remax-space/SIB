@@ -166,7 +166,7 @@ test('falhas de PDF da OpenAI preservam o motivo da rejeição e da resposta inc
 test('formatação preserva resultados antigos e apresenta cobertura dos novos', () => {
   assert.match(formatAgentOutput({ sintese_executiva: 'antigo' }, 'mestre'), /antigo/)
   assert.match(formatAgentOutput({ parecer_geral: 'antigo' }, 'orientacoes'), /antigo/)
-  assert.match(formatAgentOutput({ resposta: 'nova', cobertura_documental: { status: 'PARCIAL', paginas: [], limitacoes: ['OCR indisponível'] } }), /OCR indisponível/)
+  assert.match(formatAgentOutput({ resposta: 'nova', cobertura_documental: { status: 'PARCIAL', paginas: [], limitacoes: ['OCR indisponível'] } }), /páginas não têm texto legível/)
 })
 
 test('modelo textual recebe todos os fragmentos de uma página densa sem corte silencioso', async () => {

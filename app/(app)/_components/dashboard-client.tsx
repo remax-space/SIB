@@ -1,28 +1,20 @@
 'use client'
-
+import { ExpandedView } from '@/components/expanded-view'
 import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useAnalysisDraft } from '@/components/analysis-drafts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { FadeIn } from '@/components/ui/animate'
-import { Upload, X, Play, AlertTriangle, Copy, Check, Loader2 } from 'lucide-react'
+import { Upload, X, Play, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { AGENTS, DEFAULT_MISSION, LEGAL_CLASSES, SIB_VERSION } from '@/lib/constants'
+import { AGENTS, LEGAL_CLASSES } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
 import { ConversationTable } from '@/components/conversation-table'
-import { StatusExplanation } from '@/components/status-explanation'
 import { putUploadedFile } from '@/lib/upload-file'
 import { extractCnjFromText, type PdfCaseMetadataField } from '@/lib/pdf-case-metadata'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 
 const AGENT_FIELDS: Record<string, string> = {
   basile: 'basileResult',
@@ -43,16 +35,14 @@ function emptyAgents(): Record<string, AgentResult> {
 }
 
 export function DashboardClient() {
-  const [caseId, setCaseId] = useState('')
-  const [clientName, setClientName] = useState('')
-  const [legalClass, setLegalClass] = useState('ACAO_CONHECIMENTO')
-  const [complement, setComplement] = useState('')
-  const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [pdfName, setPdfName] = useState('')
+  const [caseId, setCaseId] = useAnalysisDraft('start:caseId', '')
+  const [clientName, setClientName] = useAnalysisDraft('start:clientName', '')
+  const [legalClass, setLegalClass] = useAnalysisDraft('start:legalClass', 'ACAO_CONHECIMENTO')
+  const [complement, setComplement] = useAnalysisDraft('start:complement', '')
+  const [pdfFile, setPdfFile] = useAnalysisDraft<File | null>('start:pdf', null)
+  const [pdfName, setPdfName] = useAnalysisDraft('start:pdfName', '')
 
-  const [caseStatus, setCaseStatus] = useState('PENDENTE')
   const [corpusStatus, setCorpusStatus] = useState('SEM ARQUIVO')
-  const [clientStatus, setClientStatus] = useState('PENDENTE')
 
   const [isRunning, setIsRunning] = useState(false)
   const [agents, setAgents] = useState<Record<string, AgentResult>>(emptyAgents)
@@ -60,16 +50,14 @@ export function DashboardClient() {
   const [analysisCompleted, setAnalysisCompleted] = useState(false)
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null)
   const [pendencias, setPendencias] = useState<string[]>([])
+  const [submitted, setSubmitted] = useState(false)
   const [copiedAgent, setCopiedAgent] = useState<string | null>(null)
   const [readingPdf, setReadingPdf] = useState(false)
-  const [metaModalOpen, setMetaModalOpen] = useState(false)
-  const [metaMissing, setMetaMissing] = useState<PdfCaseMetadataField[]>([])
-  const [manualCaseId, setManualCaseId] = useState('')
-  const [manualClientName, setManualClientName] = useState('')
-  const [manualLegalClass, setManualLegalClass] = useState('ACAO_CONHECIMENTO')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const legalClassTouchedRef = useRef(false)
+  const [resume] = useAnalysisDraft<{ current: { caseId?: string; number?: string; file?: File; documentId?: string } }>('start:resume', { current: {} })
+  const resumeRef = resume
 
   const updateAgent = (key: string, next: Partial<AgentResult> | ((prev: AgentResult) => AgentResult)) => {
     setAgents((prev) => {
@@ -83,9 +71,9 @@ export function DashboardClient() {
 
   const checkPendencias = useCallback(() => {
     const pending: string[] = []
-    if (!caseId.trim()) pending.push('Processo / Case ID não informado')
-    if (!pdfFile && corpusStatus === 'SEM ARQUIVO') pending.push('PDF / Corpus não adicionado')
-    if (!clientName.trim()) pending.push('Nome do cliente não informado')
+    if (!caseId.trim()) pending.push('Informe o número do processo')
+    if (!pdfFile && corpusStatus === 'SEM ARQUIVO') pending.push('Selecione um documento PDF')
+    if (!clientName.trim()) pending.push('Informe o nome do cliente')
     setPendencias(pending)
     return pending
   }, [caseId, pdfFile, corpusStatus, clientName])
@@ -105,7 +93,6 @@ export function DashboardClient() {
     if (nextCaseId) setCaseId(nextCaseId)
     if (nextClientName) {
       setClientName(nextClientName)
-      setClientStatus(nextClientName)
     }
     if (nextLegalClass) {
       setLegalClass(nextLegalClass)
@@ -117,15 +104,8 @@ export function DashboardClient() {
     if (!nextClientName) missing.push('clientName')
     if (!nextLegalClass && !current.legalClassTouched) missing.push('legalClass')
 
-    if (missing.length > 0) {
-      setManualCaseId(nextCaseId)
-      setManualClientName(nextClientName)
-      setManualLegalClass(nextLegalClass || 'ACAO_CONHECIMENTO')
-      setMetaMissing(missing)
-      setMetaModalOpen(true)
-    } else {
-      toast.success('Dados do PDF preenchidos automaticamente.')
-    }
+    if (missing.length > 0) toast.info('Confira e complete os dados do processo abaixo.')
+    else toast.success('Dados do PDF preenchidos. Confira antes de iniciar.')
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,7 +115,7 @@ export function DashboardClient() {
 
     setPdfFile(file)
     setPdfName(file.name)
-    setCorpusStatus('LENDO PDF...')
+    setCorpusStatus('Lendo o PDF…')
     setReadingPdf(true)
 
     const fromName = extractCnjFromText(file.name)
@@ -183,43 +163,15 @@ export function DashboardClient() {
     }
   }
 
-  const handleConfirmManualMetadata = () => {
-    if (metaMissing.includes('caseId') && !manualCaseId.trim()) {
-      toast.error('Informe o número do processo.')
-      return
-    }
-    if (metaMissing.includes('clientName') && !manualClientName.trim()) {
-      toast.error('Informe o nome do cliente.')
-      return
-    }
-    if (metaMissing.includes('legalClass') && !manualLegalClass.trim()) {
-      toast.error('Informe a classe processual.')
-      return
-    }
-
-    if (manualCaseId.trim()) setCaseId(manualCaseId.trim())
-    if (manualClientName.trim()) {
-      setClientName(manualClientName.trim())
-      setClientStatus(manualClientName.trim())
-    }
-    if (manualLegalClass.trim()) {
-      setLegalClass(manualLegalClass)
-      legalClassTouchedRef.current = true
-    }
-    setMetaModalOpen(false)
-    toast.success('Dados do processo confirmados.')
-  }
-
   const handleClearFields = () => {
+    resumeRef.current = {}
     setCaseId('')
     setClientName('')
     setLegalClass('ACAO_CONHECIMENTO')
     setComplement('')
     setPdfFile(null)
     setPdfName('')
-    setCaseStatus('PENDENTE')
     setCorpusStatus('SEM ARQUIVO')
-    setClientStatus('PENDENTE')
     setAgents(emptyAgents())
     setAnalysisId(null)
     setAnalysisCompleted(false)
@@ -227,17 +179,11 @@ export function DashboardClient() {
     setPendencias([])
     setIsRunning(false)
     setReadingPdf(false)
-    setMetaModalOpen(false)
-    setMetaMissing([])
-    setManualCaseId('')
-    setManualClientName('')
-    setManualLegalClass('ACAO_CONHECIMENTO')
     legalClassTouchedRef.current = false
   }
 
   const handleClientKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && clientName.trim()) {
-      setClientStatus(clientName.trim())
     }
   }
 
@@ -250,6 +196,7 @@ export function DashboardClient() {
   }
 
   const handleExecutarRodada = async () => {
+    setSubmitted(true)
     const pending = checkPendencias()
     if (pending.length > 0) return
     if (!pdfFile) return
@@ -258,11 +205,12 @@ export function DashboardClient() {
     setIsRunning(true)
     setAnalysisCompleted(false)
     setAgents(Object.fromEntries(
-      AGENTS.map((agent) => [agent.key, { status: agent.key === 'basile' ? 'running' : 'waiting', content: '' }])
+      AGENTS.map((agent) => [agent.key, { status: 'waiting', content: '' }])
     ))
 
     try {
-      setCaseStatus('CRIANDO...')
+      let caseData: { id?: string; error?: string } = { id: resumeRef.current.caseId }
+      if (!caseData.id || resumeRef.current.number !== caseId.trim()) {
       const caseRes = await fetch('/api/cases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -275,12 +223,15 @@ export function DashboardClient() {
           status: 'ATIVO',
         }),
       })
-      const caseData = await caseRes.json()
+      caseData = await caseRes.json()
       if (!caseRes.ok) throw new Error(caseData?.error ?? 'Erro ao criar caso')
-      setCaseStatus('ATIVO')
-      setClientStatus(clientName.trim())
-      setCreatedCaseId(caseData.id)
+      setCreatedCaseId(caseData.id ?? null)
+      resumeRef.current = { caseId: caseData.id, number: caseId.trim() }
 
+      }
+      setCreatedCaseId(caseData.id ?? null)
+      let documentId = resumeRef.current.file === pdfFile ? resumeRef.current.documentId : undefined
+      if (!documentId) {
       setCorpusStatus('ENVIANDO...')
       const uploadRes = await fetch('/api/documents/upload', {
         method: 'POST',
@@ -312,20 +263,13 @@ export function DashboardClient() {
       })
       const completeData = await completeRes.json()
       if (!completeRes.ok) throw new Error(completeData?.error ?? 'Erro ao completar upload')
-      const documentId = completeData.id
+      documentId = completeData.id
+      resumeRef.current = { ...resumeRef.current, file: pdfFile, documentId }
       setCorpusStatus(pdfFile.name + ' ✓')
 
-      setCorpusStatus('EXTRAINDO TEXTO...')
-      const extractRes = await fetch(`/api/documents/${documentId}/extract`, {
-        method: 'POST',
-      })
-      if (!extractRes.ok) {
-        setCorpusStatus(pdfFile.name + ' (texto não extraído)')
-      } else {
-        setCorpusStatus(pdfFile.name + ' ✓ (texto extraído)')
       }
 
-      const mission = DEFAULT_MISSION + (complement.trim() ? '\n\nCOMPLEMENTO DO OPERADOR: ' + complement.trim() : '')
+      const mission = complement.trim()
 
       const analysisRes = await fetch('/api/analysis/run', {
         method: 'POST',
@@ -400,35 +344,31 @@ export function DashboardClient() {
         const completedResponse = await fetch(`/api/analysis/${newAnalysisId}`)
         if (completedResponse.ok) {
           const completed = await completedResponse.json()
+          for (const [agent, field] of Object.entries(AGENT_FIELDS)) {
+            if (completed[field]) updateAgent(agent, { status: 'done', content: formatAgentOutput(completed[field], agent) })
+          }
           setAnalysisCompleted(completed.status === 'CONCLUIDO')
+          if (completed.status === 'EM_ANDAMENTO') toast.info('A análise continua no histórico do caso. Abra o resultado para acompanhar.')
         }
       }
     } catch (err: any) {
       console.error('Execution error:', err)
-      updateAgent('basile', (prev) =>
-        prev.status === 'running' ? { status: 'error', content: err?.message ?? 'Erro' } : prev
-      )
+      setPendencias([err?.message ?? 'Não foi possível concluir. Seus dados foram mantidos; tente novamente.'])
     } finally {
       setIsRunning(false)
     }
   }
-
-  const triad = AGENTS.filter((agent) => ['basile', 'advocado', 'cabeca'].includes(agent.key))
-  const auditor = AGENTS.find((agent) => agent.key === 'auditor')
-  const mestre = AGENTS.find((agent) => agent.key === 'mestre')
-  const orientador = AGENTS.find((agent) => agent.key === 'orientacoes')
 
   return (
     <div className="space-y-6">
       <FadeIn>
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-            SISTEMA INTELIGÊNCIA JURÍDICA BASILE
+            Iniciar análise
           </h1>
           <p className="text-sm text-info mt-1">
-            Fluxo direto: processo + PDF/corpus + missão → Operador → Advogado do Diabo → Cabeça do Juiz → Auditor → MESTRE → Orientador.
+            Analise documentos e identifique o que exige atenção com o Método Basile.
           </p>
-          <p className="text-xs text-muted-foreground mt-1 font-mono">{SIB_VERSION}</p>
         </div>
       </FadeIn>
 
@@ -436,28 +376,28 @@ export function DashboardClient() {
         <CardContent className="p-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-start">
             <div>
-              <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">PROCESSO / CASE ID</label>
-              <Input
+              <label htmlFor="process-number" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">Número do processo (obrigatório)</label>
+              <Input id="process-number" aria-required="true" aria-invalid={submitted && !caseId.trim()} aria-describedby={submitted && !caseId.trim() ? "process-error" : undefined}
                 value={caseId}
                 onChange={(e) => setCaseId(e.target.value)}
-                placeholder="Ex: 5000001-01.2026.8.09.0000"
+
                 className="font-mono text-sm bg-input border-border"
                 disabled={isRunning || readingPdf}
               />
-              <p className="text-xs mt-1 text-muted-foreground">
-                CASO: <span className={caseStatus === 'ATIVO' ? 'text-success' : 'text-muted-foreground'}><StatusExplanation status={caseStatus} label={caseStatus} detail={caseStatus === 'PENDENTE' ? 'O processo ainda não foi cadastrado. Informe o número processual e conclua o preenchimento para ativá-lo.' : undefined} /></span>
-              </p>
+              {submitted && !caseId.trim() && <p id="process-error" className="text-sm text-destructive" role="alert">Informe o número do processo.</p>}
+
             </div>
             <div>
-              <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">PDF / CORPUS AUTORIZADO</label>
-              <Input
+              <label htmlFor="document-name" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">Documento PDF (obrigatório)</label>
+              <Input id="document-name" aria-required="true" aria-invalid={submitted && !pdfFile} aria-describedby={submitted && !pdfFile ? "document-error" : undefined}
                 value={pdfName}
                 readOnly
-                placeholder="Nenhum arquivo selecionado"
+
                 className="text-sm bg-input border-border cursor-default"
               />
+              {submitted && !pdfFile && <p id="document-error" className="text-sm text-destructive" role="alert">Selecione um documento PDF.</p>}
               <p className="text-xs mt-1 text-muted-foreground">
-                CORPUS: <span className={corpusStatus === 'SEM ARQUIVO' || corpusStatus === 'LENDO PDF...' ? 'text-muted-foreground' : 'text-success'}>{corpusStatus}</span>
+                Documento: <span className={corpusStatus === 'SEM ARQUIVO' || corpusStatus === 'Lendo o PDF…' ? 'text-muted-foreground' : 'text-success'}>{corpusStatus === 'SEM ARQUIVO' ? 'Nenhum selecionado' : corpusStatus}</span>
               </p>
               <input
                 ref={fileInputRef}
@@ -474,7 +414,7 @@ export function DashboardClient() {
                 className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide"
               >
                 {readingPdf ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
-                {readingPdf ? 'LENDO PDF...' : 'ADICIONAR PDF'}
+                {readingPdf ? 'Lendo o PDF…' : 'Selecionar PDF'}
               </Button>
               <Button
                 onClick={handleClearFields}
@@ -482,28 +422,29 @@ export function DashboardClient() {
                 className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide"
               >
                 <X className="w-3.5 h-3.5 mr-1.5" />
-                LIMPAR CAMPOS
+                Limpar formulário
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <div>
-              <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-                NOME DO CLIENTE — ENTER PARA CADASTRAR
+              <label htmlFor="client-name" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
+                Nome do cliente (obrigatório)
               </label>
-              <Input
+              <Input id="client-name" aria-required="true" aria-invalid={submitted && !clientName.trim()} aria-describedby={submitted && !clientName.trim() ? "client-error" : undefined}
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
                 onKeyDown={handleClientKeyDown}
-                placeholder="Digite o nome do cliente e pressione Enter"
+
                 className="text-sm bg-input border-border"
                 disabled={isRunning || readingPdf}
               />
+              {submitted && !clientName.trim() && <p id="client-error" className="text-sm text-destructive" role="alert">Informe o nome do cliente.</p>}
             </div>
             <div>
-              <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">CLASSE PROCESSUAL</label>
-              <select
+              <label htmlFor="legal-class" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">Classe processual</label>
+              <select id="legal-class"
                 value={legalClass}
                 onChange={(e) => {
                   legalClassTouchedRef.current = true
@@ -519,66 +460,34 @@ export function DashboardClient() {
                   <option key={item.value} value={item.value}>{item.label}</option>
                 ))}
               </select>
-              <p className="text-xs mt-1 text-muted-foreground">
-                CLIENTE/CAIXA: <span className={clientStatus === 'PENDENTE' ? 'text-muted-foreground' : 'text-success'}><StatusExplanation status={clientStatus} label={clientStatus} detail={clientStatus === 'PENDENTE' ? 'O cliente ainda não foi cadastrado. Digite o nome no campo acima e pressione Enter para cadastrá-lo.' : undefined} /></span>
-              </p>
-            </div>
-          </div>
 
-          <div>
-            <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-              MISSÃO PADRÃO DO MÉTODO BASILE — FIXA
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
-              <Textarea
-                value={DEFAULT_MISSION}
-                readOnly
-                className="text-sm bg-input border-border min-h-[80px] resize-none"
-              />
-              <div className="flex items-center">
-                <Button
-                  onClick={handleExecutarRodada}
-                  disabled={isRunning || readingPdf}
-                  size="lg"
-                  className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-sm tracking-wide h-full min-h-[80px] px-8"
-                >
-                  {isRunning ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />EXECUTANDO...</>
-                  ) : (
-                    <><Play className="w-4 h-4 mr-2" />EXECUTAR RODADA</>
-                  )}
-                </Button>
-              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
             <div>
-              <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-                COMPLEMENTO OPCIONAL DO OPERADOR
+              <label htmlFor="analysis-objective" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
+                O que você precisa descobrir? (opcional)
               </label>
-              <Textarea
+              <Textarea id="analysis-objective" maxLength={6000}
                 value={complement}
                 onChange={(e) => setComplement(e.target.value)}
-                placeholder="Instruções adicionais para esta rodada..."
+                placeholder="Ex.: Quais pontos precisam ser confirmados?"
                 className="text-sm bg-input border-border min-h-[60px]"
                 disabled={isRunning}
               />
             </div>
-            <div className="flex items-end">
-              <Button
-                onClick={() => checkPendencias()}
-                className="bg-nav text-nav-foreground hover:bg-nav-hover border border-nav-border font-bold text-xs tracking-wide h-[60px] px-6"
-              >
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                PENDÊNCIAS ACIMA
-              </Button>
-            </div>
+
           </div>
 
+          <p className="text-sm text-muted-foreground">Envie um PDF e confira os dados do processo para iniciar.</p>
+          <Button onClick={handleExecutarRodada} disabled={isRunning || readingPdf} size="lg" className="w-full sm:w-auto">
+            {isRunning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analisando documentos…</> : <><Play className="w-4 h-4 mr-2" />Iniciar análise</>}
+          </Button>
+
           {pendencias.length > 0 && (
-            <div className="bg-nav/40 border border-nav-border rounded-lg p-3">
-              <p className="text-xs font-bold text-nav-foreground mb-1">PENDÊNCIAS IDENTIFICADAS:</p>
+            <div role="alert" className="bg-nav/40 border border-nav-border rounded-lg p-3">
+              <p className="text-xs font-bold text-nav-foreground mb-1">Antes de iniciar:</p>
               <ul className="text-xs text-muted-foreground space-y-0.5">
                 {pendencias.map((item) => (
                   <li key={item}>• {item}</li>
@@ -597,155 +506,25 @@ export function DashboardClient() {
         </CardContent>
       </Card>
 
-      <div>
-        <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
-          6. RESULTADOS DA RODADA — TRÍADE INDEPENDENTE
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {triad.map((agent) => (
-            <AgentCard
-              key={agent.key}
-              title={agent.label}
-              agent={agents[agent.key]}
-              onCopy={() => handleCopy(agent.key, agents[agent.key]?.content ?? '')}
-              copied={copiedAgent === agent.key}
-            />
-          ))}
-        </div>
-      </div>
-
-      {auditor && (
-        <div>
-          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
-            6B. AUDITOR DOCUMENTAL — INTEGRIDADE E ICP
-          </h2>
-          <AgentCard
-            title={auditor.label}
-            agent={agents[auditor.key]}
-            onCopy={() => handleCopy(auditor.key, agents[auditor.key]?.content ?? '')}
-            copied={copiedAgent === auditor.key}
-          />
-        </div>
-      )}
-
-      {mestre && (
-        <div>
-          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
-            7. CONCLUSÃO DO MESTRE — AUDITORIA POSTERIOR À TRÍADE
-          </h2>
-          <Card className="border-primary/30">
-            <div className="bg-primary/20 px-4 py-2">
-              <h3 className="text-sm font-bold text-primary">MESTRE — SÍNTESE ESTRATÉGICA</h3>
-            </div>
-            <CardContent className="p-4">
-              <AgentBody agent={agents[mestre.key]} />
-              <div className="flex justify-end mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleCopy('mestre', agents[mestre.key]?.content ?? '')}
-                  disabled={!agents[mestre.key]?.content}
-                  className="text-xs"
-                >
-                  {copiedAgent === 'mestre' ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                  COPIAR
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {orientador && (
-        <div>
-          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
-            8. ORIENTADOR — REVISOR INDEPENDENTE
-          </h2>
-          <AgentCard
-            title={orientador.label}
-            agent={agents[orientador.key]}
-            onCopy={() => handleCopy(orientador.key, agents[orientador.key]?.content ?? '')}
-            copied={copiedAgent === orientador.key}
-          />
-        </div>
-      )}
+      {Object.values(agents).some(a => a.status !== 'waiting') && <section aria-label="Resultados disponíveis" className="space-y-4">
+        <h2 className="font-semibold">Resultados disponíveis</h2>
+        <p role="status" className="text-sm text-muted-foreground">{isRunning ? 'Análise em andamento. As conclusões aparecem conforme ficam disponíveis.' : analysisCompleted ? 'Análise finalizada. Confira as ressalvas e as fontes.' : 'A análise foi interrompida. Consulte os resultados disponíveis antes de tentar novamente.'}</p>
+        {['mestre', 'orientacoes', 'basile', 'advocado', 'cabeca', 'auditor'].filter(key => agents[key]?.status !== 'waiting').map(key => <details key={key} open={key === 'mestre'} className="rounded-lg border p-4"><summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2">{({ mestre: 'Síntese', orientacoes: 'Revisão independente', basile: 'Documentos e fatos', advocado: 'Argumentos contrários', cabeca: 'Perspectiva judicial', auditor: 'Suporte documental' } as Record<string, string>)[key]} — {getAgentStatusLabel(agents[key].status)}</summary><div className="pt-4"><AgentBody agent={agents[key]} /><div className="mt-3"><ExpandedView title={AGENTS.find(agent => agent.key === key)?.label ?? 'Resultado'}><AgentBody agent={agents[key]} expanded /></ExpandedView></div><Button variant="outline" className="mt-3" onClick={() => handleCopy(key, agents[key].content)} disabled={!agents[key].content}>{copiedAgent === key ? 'Copiado' : 'Copiar com fontes e ressalvas'}</Button></div></details>)}
+      </section>}
 
       {analysisCompleted && analysisId && <ConversationTable key={analysisId} analysisId={analysisId} />}
 
-      <Dialog open={metaModalOpen} onOpenChange={setMetaModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Completar dados do PDF</DialogTitle>
-            <DialogDescription>
-              Alguns dados não foram encontrados automaticamente. Informe manualmente para continuar.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {metaMissing.includes('caseId') && (
-              <div>
-                <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-                  NÚMERO DO PROCESSO
-                </label>
-                <Input
-                  value={manualCaseId}
-                  onChange={(e) => setManualCaseId(e.target.value)}
-                  placeholder="Ex: 5000001-01.2026.8.09.0000"
-                  className="font-mono text-sm"
-                  autoFocus
-                />
-              </div>
-            )}
-            {metaMissing.includes('clientName') && (
-              <div>
-                <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-                  NOME DO CLIENTE
-                </label>
-                <Input
-                  value={manualClientName}
-                  onChange={(e) => setManualClientName(e.target.value)}
-                  placeholder="Nome da parte / cliente"
-                  className="text-sm"
-                  autoFocus={!metaMissing.includes('caseId')}
-                />
-              </div>
-            )}
-            {metaMissing.includes('legalClass') && (
-              <div>
-                <label className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">
-                  CLASSE PROCESSUAL
-                </label>
-                <select
-                  value={manualLegalClass}
-                  onChange={(e) => setManualLegalClass(e.target.value)}
-                  className="w-full h-10 rounded-md bg-input border border-border px-3 text-sm"
-                >
-                  {LEGAL_CLASSES.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMetaModalOpen(false)}>
-              Depois
-            </Button>
-            <Button onClick={handleConfirmManualMetadata}>
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </div>
   )
 }
 
 function getAgentStatusLabel(status: AgentResult['status']): string {
   switch (status) {
-    case 'waiting': return 'AGUARDANDO RODADA'
-    case 'running': return 'PROCESSANDO...'
-    case 'done': return 'CONCLUÍDO'
-    case 'error': return 'ERRO'
+    case 'waiting': return 'Aguardando'
+    case 'running': return 'Em andamento'
+    case 'done': return 'Resultado disponível'
+    case 'error': return 'Interrompido'
   }
 }
 
@@ -758,7 +537,7 @@ function getAgentStatusColor(status: AgentResult['status']): string {
   }
 }
 
-function AgentBody({ agent }: { agent?: AgentResult }) {
+function AgentBody({ agent, expanded = false }: { agent?: AgentResult; expanded?: boolean }) {
   const current = agent ?? { status: 'waiting' as const, content: '' }
   return (
     <>
@@ -766,39 +545,9 @@ function AgentBody({ agent }: { agent?: AgentResult }) {
         {current.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
         {getAgentStatusLabel(current.status)}
       </p>
-      <div className="text-sm bg-input border border-border rounded-md min-h-[150px] max-h-[320px] overflow-y-auto p-3 whitespace-pre-wrap leading-relaxed">
+      <div className={`text-sm bg-input border border-border rounded-md min-h-[150px] p-3 whitespace-pre-wrap leading-relaxed ${expanded ? '' : 'max-h-[320px] overflow-y-auto'}`}>
         {current.content || <span className="text-muted-foreground"> </span>}
       </div>
     </>
-  )
-}
-
-function AgentCard({ title, agent, onCopy, copied }: {
-  title: string
-  agent?: AgentResult
-  onCopy: () => void
-  copied: boolean
-}) {
-  return (
-    <Card className="border-border/50">
-      <div className="bg-surface-2 px-4 py-2">
-        <h3 className="text-sm font-bold text-foreground">{title}</h3>
-      </div>
-      <CardContent className="p-4">
-        <AgentBody agent={agent} />
-        <div className="flex justify-center mt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCopy}
-            disabled={!agent?.content}
-            className="text-xs"
-          >
-            {copied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-            COPIAR
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
   )
 }

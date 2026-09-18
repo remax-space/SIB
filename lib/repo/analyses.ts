@@ -34,7 +34,7 @@ const UPDATE_FIELDS = [
   ...RESULT_FIELDS,
 ] as const
 
-async function hydrateResults(data: Record<string, unknown>) {
+export async function hydrateResults(data: Record<string, unknown>) {
   const next = { ...data }
   for (const field of RESULT_FIELDS) {
     if (next[field] != null) next[field] = await readLargeJson(next[field])
@@ -92,6 +92,9 @@ export async function createAnalysis(input: {
   parentAnalysisId?: string
   jobId: string
   missionLiteral: string
+  instructionsVersion?: string
+  analysisRequest?: string
+  documentSources?: { id: string; filename: string; pageCount: number | null }[]
   authorizedProduct?: string | null
   provider?: string
   modelUsed?: string | null
@@ -128,6 +131,9 @@ export async function createAnalysis(input: {
       ...(input.evidenceId ? { evidenceId: input.evidenceId, parentAnalysisId: input.parentAnalysisId ?? null } : {}),
       jobId: input.jobId,
       missionLiteral: input.missionLiteral,
+      instructionsVersion: input.instructionsVersion ?? null,
+      analysisRequest: input.analysisRequest ?? null,
+      documentSources: input.documentSources ?? [],
       authorizedProduct: input.authorizedProduct ?? null,
       provider: input.provider ?? 'openai',
       modelUsed: input.modelUsed ?? null,

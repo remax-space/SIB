@@ -253,7 +253,6 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
                                   <StatusExplanation status={doc?.readStatus} label={readDef?.label ?? doc?.readStatus} />
                                 </span>
                               </div>
-                              <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">SHA-256: {doc?.sha256?.substring(0, 16)}...</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
@@ -325,9 +324,9 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <p className="font-mono text-xs text-primary">{a?.jobId}</p>
+                              <p className="font-mono text-xs text-primary">Análise dos documentos</p>
                               <p className="text-sm text-muted-foreground mt-0.5">
-                                {a?.runMode === 'COMPLETA' ? '5 Agentes' : a?.runMode} • {a?.provider}
+                                Ver resultado, fontes e próximos passos
                               </p>
                             </div>
                             <div className="flex items-center gap-3">

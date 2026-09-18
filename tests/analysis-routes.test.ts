@@ -118,12 +118,13 @@ test('Basile recebe PDF para leitura visual quando não há camada textual', asy
   } finally { h.dispose() }
 })
 
-test('falha em todas as páginas expõe o motivo no SSE e preserva a cobertura', async () => {
+test('falha em todas as páginas protege o motivo no SSE e preserva a cobertura', async () => {
   const h = await harness('app/api/analysis/run/route.ts', { scanned: true, failFirst: true })
   try {
     const response = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'], runMode: 'SOMENTE_BASILE' }))
     const events: { status: string; message: string }[] = String(await response.text()).split('\n\n').filter(Boolean).map(line => JSON.parse(line.replace(/^data: /, '')))
-    assert.match(events.find(e => e.status === 'error')?.message ?? '', /Motivo: Falha simulada de interpretação/)
+    assert.match(events.find(e => e.status === 'error')?.message ?? '', /resultados disponíveis foram preservados/)
+    assert.doesNotMatch(JSON.stringify(events), /Falha simulada de interpretação/)
     assert.equal(h.state.status, 'ERRO')
     assert.match(h.state.errorDetail, /Falha simulada de interpretação/)
     assert.equal(h.state.basileResult.cobertura_documental.paginas[0].processado, false)
@@ -201,8 +202,10 @@ test('falha de interpretação na mesa preserva pacote e permite repetir somente
     const second = await h.route.POST(request(body), { params: Promise.resolve({ id: 'analysis' }) })
     assert.equal(second.status, 200)
     const result = await second.json()
-    assert.equal(result.conversation[0].researchEvidence.evidenceId, 'snapshot')
-    assert.deepEqual(result.conversation[0].researchCitationAudit.citedSourceIds, ['research:1'])
+    assert.equal(result.conversation[0].researchEvidence, undefined)
+    assert.equal(h.state.conversation[0].researchEvidence.evidenceId, 'snapshot')
+    assert.deepEqual(h.state.conversation[0].researchCitationAudit.citedSourceIds, ['research:1'])
+    assert.doesNotMatch(JSON.stringify(result), /research:1|snapshot|documentoId/)
     assert.equal(h.calls.length, 2)
     assert.equal(h.calls[0].user, h.calls[1].user)
     assert.equal(h.downloads(), 0)

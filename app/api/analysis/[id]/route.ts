@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { deleteAnalysisRecord, getAnalysisById } from '@/lib/db';
+import { presentAnalysisRecord } from '@/lib/public-analysis-server';
+import { deleteAnalysisRecord, getAnalysisById, getDocumentsWithText } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
-import { getEvidenceUses } from '@/lib/repo/research';
 import { ResearchError } from '@/lib/research/adapter';
 import { researchHttpError } from '@/lib/research/http';
 
@@ -30,11 +30,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Análise não encontrada' }, { status: 404 });
     }
 
-    return NextResponse.json({
-      ...analysis,
-      ...(analysis?.evidenceId ? { researchEvidenceUses: await getEvidenceUses(id) } : {}),
-      icpScore: analysis?.icpScore != null ? Number(analysis.icpScore) : null,
-    });
+    const docs = await getDocumentsWithText(Array.isArray(analysis.documentIds) ? analysis.documentIds as string[] : []);
+    return NextResponse.json(await presentAnalysisRecord(analysis, docs.map(d => ({ id: d.id, filename: String(d.filename), pageCount: typeof d.pageCount === 'number' ? d.pageCount : null }))));
   } catch (error: any) {
     console.error('Analysis GET error:', error);
     return NextResponse.json({ error: 'Erro ao buscar análise' }, { status: 500 });

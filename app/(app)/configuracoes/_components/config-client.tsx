@@ -1,5 +1,6 @@
 'use client'
 
+import { BasileInstructions } from '@/components/basile-instructions'
 import { PageHeader } from '@/components/layouts/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FadeIn } from '@/components/ui/animate'
@@ -17,6 +18,7 @@ export function ConfigClient() {
         />
       </FadeIn>
 
+      <BasileInstructions />
       {/* System Info */}
       <Card>
         <CardHeader>
@@ -37,8 +39,8 @@ export function ConfigClient() {
               <p>Método Basile™</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Pipeline de Agentes</p>
-              <p>6 agentes sequenciais + jurisprudência</p>
+              <p className="text-xs text-muted-foreground">Análises</p>
+              <p>Documentos, fontes e pontos de atenção</p>
             </div>
           </div>
         </CardContent>
@@ -67,7 +69,7 @@ export function ConfigClient() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs text-muted-foreground">Modo de Privacidade</p>
-              <p className="text-success">LEGAL_PROFESSIONAL</p>
+              <p className="text-success">Sigilo profissional ativo</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Proteção de Dados</p>

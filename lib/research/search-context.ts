@@ -1,3 +1,4 @@
+import { DEFAULT_MISSION } from '../constants'
 import type { Plan, Research } from './contracts'
 
 function text(value: unknown): string {
@@ -27,10 +28,11 @@ export function buildSearchContext(plan: Plan, analysis: Record<string, unknown>
   const blocks: { label: string; value: string; budget: number }[] = []
   const add = (label: string, value: unknown, budget: number) => { if (text(value)) blocks.push({ label, value: text(value), budget }) }
   const mission = text(analysis.missionLiteral)
+  const request = text(analysis.analysisRequest) || (mission.includes('COMPLEMENTO DO OPERADOR:') ? mission.split('COMPLEMENTO DO OPERADOR:').slice(1).join(' ') : !analysis.instructionsVersion && mission && !mission.includes(text(DEFAULT_MISSION)) ? mission : '')
   const basile = analysis.basileResult as Record<string, unknown> | undefined
   const mestre = analysis.mestreResult as Record<string, unknown> | undefined
   const orientador = analysis.orientacoesResult as Record<string, unknown> | undefined
-  const objective = text([mission.includes('COMPLEMENTO DO OPERADOR:') ? mission.split('COMPLEMENTO DO OPERADOR:').slice(1).join(' ') : mission, caseData.objective])
+  const objective = text([request, caseData.objective])
   const extras = [plan.query, plan.facts, plan.thesis].filter(v => !generic.test(v.trim()))
   const turns = Array.isArray(analysis.conversation) ? analysis.conversation.slice().reverse() : []
   const userClarifications = turns.map(t => text(t.message ?? t.question ?? t.userMessage)).filter(v => v && !noise(v)).slice(0, 3)

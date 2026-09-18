@@ -202,6 +202,10 @@ export async function getEvidence(id: string): Promise<Evidence | null> {
   const doc = await getDb().collection('legalEvidence').doc(id).get()
   return doc.exists ? doc.data() as Evidence : null
 }
+export async function listEvidence(analysisId: string, caseId: string): Promise<Evidence[]> {
+  const rows = await getDb().collection('legalEvidence').where('analysisId', '==', analysisId).get()
+  return rows.docs.map(doc => doc.data() as Evidence).filter(item => item.caseId === caseId).sort((a, b) => b.createdAt - a.createdAt)
+}
 export async function recordEvidenceUse(evidence: Evidence, analysisId: string, agent: string, turnId: string) {
   await getDb().runTransaction(async tx => {
     const state = await tx.get(lifecycle(evidence.caseId))

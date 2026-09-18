@@ -12,9 +12,9 @@ import { ThemeToggle } from '@/components/theme-toggle'
 const navSections = [
   {
     items: [
-      { href: '/', label: 'CRIADOR' },
-      { href: '/mestre', label: 'MESTRE' },
-      { href: '/orientacoes', label: 'ORIENTADOR' },
+      { href: '/', label: 'Iniciar análise' },
+      { href: '/mestre', label: 'Sínteses' },
+      { href: '/orientacoes', label: 'Revisões' },
       { href: '/jurisprudencia', label: 'JURISPRUDÊNCIA' },
     ],
   },
@@ -28,6 +28,7 @@ const navSections = [
     items: [
       { href: '/clientes', label: 'PESQUISA CLIENTES' },
       { href: '/datajud', label: 'DATAJUD CNJ' },
+      { href: '/configuracoes', label: 'Configurações' },
     ],
   },
 ]
@@ -35,7 +36,6 @@ const navSections = [
 const adminItems = [
   { href: '/licencas', label: 'LICENÇAS / MÁQUINAS' },
   { href: '/provedores', label: 'PROVEDORES DE IA' },
-  { href: '/configuracoes', label: 'Configurações' },
 ]
 
 export function Sidebar({ role }: { role?: string }) {

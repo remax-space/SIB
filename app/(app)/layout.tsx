@@ -8,5 +8,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth()
   if (!session?.user) redirect('/login')
   const role = (session.user as any).role ?? 'MACHINE'
-  return <ShellWrapper role={role}>{children}</ShellWrapper>
+  return <ShellWrapper key={session.user.id} role={role}>{children}</ShellWrapper>
 }

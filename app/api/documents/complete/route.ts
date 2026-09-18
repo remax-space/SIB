@@ -8,6 +8,7 @@ import { researchHttpError } from '@/lib/research/http';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import { readStoredFile } from '@/lib/storage';
+import { publicDocument } from '@/lib/public-document';
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       readStatus: 'PENDENTE',
     });
 
-    return NextResponse.json(doc, { status: 201 });
+    return NextResponse.json(publicDocument(doc), { status: 201 });
   } catch (error: any) {
     if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Document complete error:', error);

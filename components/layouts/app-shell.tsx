@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet'
 
 export function AppShell({
   sidebar,
@@ -20,19 +21,10 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 border-r bg-card transition-transform duration-normal ease-out md:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          'hidden md:block fixed inset-y-0 left-0 z-50 w-64 border-r bg-card'
         )}
       >
         <div className="flex h-full flex-col overflow-y-auto p-4">
@@ -44,14 +36,14 @@ export function AppShell({
       <div className="md:pl-64">
         {/* Header */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-card/80 backdrop-blur-md px-4 sm:px-6 md:hidden">
-          <Button
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}><SheetTrigger asChild><Button
             variant="ghost"
             size="icon"
             className="md:hidden"
-            onClick={() => setSidebarOpen(true)}
+            aria-label="Abrir navegação"
           >
             <PanelLeft className="h-5 w-5" />
-          </Button>
+          </Button></SheetTrigger><SheetContent side="left" className="w-72 overflow-y-auto"><SheetTitle className="sr-only">Navegação do SIB</SheetTitle><SheetDescription className="sr-only">Escolha uma área do sistema.</SheetDescription><div onClick={event => { if ((event.target as HTMLElement).closest('a')) setSidebarOpen(false) }}>{sidebar}</div></SheetContent></Sheet>
           {header}
         </header>
 

@@ -90,7 +90,6 @@ export function NovoCasoClient() {
               <div className="space-y-2">
                 <Label>Número Processual *</Label>
                 <Input
-                  placeholder="5000001-01.2026.8.09.0000"
                   value={form?.caseId ?? ''}
                   onChange={(e: any) => updateField('caseId', e?.target?.value ?? '')}
                 />
@@ -118,7 +117,6 @@ export function NovoCasoClient() {
                 <Input
                   value={form?.clientDoc ?? ''}
                   onChange={(e: any) => updateField('clientDoc', e?.target?.value ?? '')}
-                  placeholder="Opcional"
                 />
               </div>
             </div>

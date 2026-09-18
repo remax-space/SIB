@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { listCases, listRecentDocuments } from '@/lib/db'
 import { requireAuth } from '@/lib/auth-helpers'
+import { publicDocument } from '@/lib/public-document'
 
 export async function GET() {
   const gate = await requireAuth()
@@ -19,8 +20,9 @@ export async function GET() {
       (documents ?? []).map((doc: any) => {
         const related = caseMap.get(String(doc.caseId))
         return {
-          ...doc,
+          ...publicDocument(doc),
           caseName: related?.caseId ?? doc.caseId,
+          // Needed only for navigation from triage to the owning case.
           caseDbId: doc.caseId,
         }
       })
