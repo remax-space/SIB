@@ -26,8 +26,8 @@ export function MestreClient() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Sínteses das análises"
-        description="Consulte conclusões, ressalvas e próximos passos das análises."
+        title="MESTRE — Sínteses Estratégicas"
+        description="Conclusões finais do MESTRE após auditoria da tríade (Operador + Advogado do Diabo + Cabeça do Juiz)"
         actions={
           <LimparButton
             confirmMessage="Deseja limpar a lista exibida nesta janela?"
@@ -43,9 +43,9 @@ export function MestreClient() {
           <CardContent className="p-8 text-center">
             <Brain className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground">Nenhuma análise com conclusão do MESTRE ainda.</p>
-            <p className="text-sm text-muted-foreground mt-1">Inicie uma análise para consultar as conclusões aqui.</p>
+            <p className="text-sm text-muted-foreground mt-1">Execute uma rodada completa na página principal (CRIADOR).</p>
             <Link href="/">
-              <Button className="mt-4" size="sm">Iniciar análise</Button>
+              <Button className="mt-4" size="sm">Ir para o CRIADOR</Button>
             </Link>
           </CardContent>
         </Card>
@@ -60,7 +60,7 @@ export function MestreClient() {
                     <p className="text-xs text-muted-foreground mt-0.5">Caso: {a.case?.caseId ?? '—'}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-4">
-                    {a.mestreResult && <ExpandedView title="Síntese"><PublicResult result={a.mestreResult} expanded /></ExpandedView>}
+                    {a.mestreResult && <ExpandedView title="MESTRE — Síntese Estratégica"><PublicResult result={a.mestreResult} expanded /></ExpandedView>}
                     {a.icpScore != null && (
                       <div className="text-right">
                         <p className={`text-lg font-bold font-mono ${getIcpClass(a.icpScore)}`}>{Number(a.icpScore).toFixed(1)}</p>

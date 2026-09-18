@@ -7,6 +7,14 @@ import { loadEvidence, withEvidence, evidenceReceipt, auditResearchCitations } f
 type Result = Record<string, any>
 const stages = ['basile', 'advocado', 'cabeca', 'auditor', 'mestre', 'orientacoes'] as const
 const names = ['BASILE', 'ADVOGADO DO DIABO', 'CABEÇA DO JUIZ', 'AUDITOR DOCUMENTAL', 'MESTRE', 'ORIENTADOR']
+const stageLabels = [
+  'OPERADOR — Investigador',
+  'ADVOGADO DO DIABO — Contraditório',
+  'CABEÇA DO JUIZ — Perspectiva Judicial',
+  'AUDITOR DOCUMENTAL — Integridade',
+  'MESTRE — Síntese Estratégica',
+  'ORIENTADOR — Revisor Independente',
+]
 
 export async function runDocumentPipeline(opts: {
   analysis: Result; sources: Source[]; deadline: number; cutoffDate?: string
@@ -21,7 +29,7 @@ export async function runDocumentPipeline(opts: {
     if (analysis.runMode === 'SOMENTE_BASILE' && index > 0) break
     const field = `${agent}Result`
     const prior = results[field]
-    send({ status: 'agent_start', agent, label: names[index] })
+    send({ status: 'agent_start', agent, label: stageLabels[index] })
     await save({ currentAgent: agent })
     await evidenceReceipt(evidence, analysis.id, agent, analysis.id)
     const b = comparison('basile'), a = comparison('advocado'), c = comparison('cabeca'), d = comparison('auditor'), m = comparison('mestre')
@@ -59,7 +67,7 @@ export async function runDocumentPipeline(opts: {
       const score = result.icp_basile?.total
       await save({ icpScore: typeof score === 'number' && score >= 0 && score <= 100 ? score : null })
     }
-    send({ status: 'agent_complete', agent, label: names[index] })
+    send({ status: 'agent_complete', agent, label: stageLabels[index] })
   }
   await save({ status: 'CONCLUIDO', completedAt: new Date(), exitCode: 0, currentAgent: null, errorDetail: null })
   send({ status: 'completed', analysisId: analysis.id })

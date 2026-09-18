@@ -12,9 +12,9 @@ import { ThemeToggle } from '@/components/theme-toggle'
 const navSections = [
   {
     items: [
-      { href: '/', label: 'Iniciar análise' },
-      { href: '/mestre', label: 'Sínteses' },
-      { href: '/orientacoes', label: 'Revisões' },
+      { href: '/', label: 'CRIADOR' },
+      { href: '/mestre', label: 'MESTRE' },
+      { href: '/orientacoes', label: 'ORIENTADOR' },
       { href: '/jurisprudencia', label: 'JURISPRUDÊNCIA' },
     ],
   },

@@ -150,17 +150,17 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
 
       {/* Mission */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Objetivo da análise</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm">Missão Literal do Operador (opcional — usa a Missão padrão do Método Basile se vazia)</CardTitle></CardHeader>
         <CardContent>
-          <Label htmlFor="analysis-mission">O que você precisa descobrir? (opcional)</Label>
+          <Label htmlFor="analysis-mission">Missão Literal do Operador (opcional)</Label>
           <Textarea id="analysis-mission" maxLength={6000}
             value={mission}
             onChange={(e: any) => setMission(e?.target?.value ?? '')}
             rows={4}
-            placeholder="Ex.: conferir a origem do pagamento e os próximos passos."
+            placeholder="Descreva a missão de análise..."
           />
           <div className="mt-3">
-            <Label htmlFor="analysis-product">Resultado desejado (opcional)</Label>
+            <Label htmlFor="analysis-product">Produto Autorizado (opcional)</Label>
             <Textarea id="analysis-product"
               value={product}
               onChange={(e: any) => setProduct(e?.target?.value ?? '')}
@@ -220,14 +220,14 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="analysis-mode">Tipo de análise</Label>
+              <Label htmlFor="analysis-mode">Modo de Execução</Label>
               <select id="analysis-mode"
                 value={runMode}
                 onChange={(e: any) => setRunMode(e?.target?.value ?? 'COMPLETA')}
                 className="w-full bg-card border border-input rounded-lg px-3 py-2 text-sm text-foreground"
               >
-                <option value="COMPLETA">Análise completa</option>
-                <option value="SOMENTE_BASILE">Leitura inicial dos documentos</option>
+                <option value="COMPLETA">Análise Completa (5 Agentes)</option>
+                <option value="SOMENTE_BASILE">Somente OPERADOR</option>
               </select>
             </div>
           </div>
@@ -246,7 +246,7 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
           {running ? (
             <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Executando {currentLabel}...</>
           ) : (
-            <><Play className="w-5 h-5 mr-2" />Iniciar análise</>
+            <><Play className="w-5 h-5 mr-2" />Executar Análise</>
           )}
         </Button>
 
@@ -276,12 +276,12 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
 
 function friendlyProgressLabel(agent: unknown) {
   const labels: Record<string, string> = {
-    basile: 'Lendo e organizando os documentos…',
-    advocado: 'Verificando pontos de atenção…',
-    cabeca: 'Avaliando possíveis decisões…',
-    auditor: 'Conferindo o suporte documental…',
-    mestre: 'Preparando a síntese…',
-    orientacoes: 'Revisando a conclusão…',
+    basile: 'OPERADOR — Investigador…',
+    advocado: 'ADVOGADO DO DIABO — Contraditório…',
+    cabeca: 'CABEÇA DO JUIZ — Perspectiva Judicial…',
+    auditor: 'AUDITOR DOCUMENTAL — Integridade…',
+    mestre: 'MESTRE — Síntese Estratégica…',
+    orientacoes: 'ORIENTADOR — Revisor Independente…',
   }
-  return labels[String(agent)] ?? 'Analisando os documentos…'
+  return labels[String(agent)] ?? 'Executando agentes…'
 }

@@ -14,7 +14,7 @@ import { publicAnalysis, resultFields, resultText, type PublicResult as Result }
 import type { PublicEvidence as Evidence } from '@/lib/research/public'
 import { useRouter } from 'next/navigation'
 
-const labels = ['Documentos e fatos', 'Argumentos contrários', 'Perspectiva judicial', 'Suporte documental', 'Síntese', 'Revisão independente', 'Jurisprudência']
+const labels = ['OPERADOR — Investigador', 'ADVOGADO DO DIABO — Contraditório', 'CABEÇA DO JUIZ — Perspectiva Judicial', 'AUDITOR DOCUMENTAL — Integridade', 'MESTRE — Síntese Estratégica', 'ORIENTADOR — Revisor Independente', 'JURISPRUDÊNCIA']
 type Analysis = ReturnType<typeof publicAnalysis>
 export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; analysisId: string }) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null), [error, setError] = useState('')

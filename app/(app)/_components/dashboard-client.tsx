@@ -354,10 +354,10 @@ export function DashboardClient() {
       <FadeIn>
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-            Iniciar análise
+            SISTEMA INTELIGÊNCIA JURÍDICA BASILE
           </h1>
           <p className="text-sm text-info mt-1">
-            Analise documentos e identifique o que exige atenção com o Método Basile.
+            Fluxo direto: processo + PDF/corpus + missão → Operador → Advogado do Diabo → Cabeça do Juiz → Auditor → MESTRE → Orientador.
           </p>
         </div>
       </FadeIn>
@@ -472,7 +472,7 @@ export function DashboardClient() {
 
           <p className="text-sm text-muted-foreground">Envie um PDF e confira os dados do processo para iniciar.</p>
           <Button onClick={handleExecutarRodada} disabled={isRunning || readingPdf} size="lg" className="w-full sm:w-auto">
-            {isRunning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analisando documentos…</> : <><Play className="w-4 h-4 mr-2" />Iniciar análise</>}
+            {isRunning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />EXECUTANDO RODADA...</> : <><Play className="w-4 h-4 mr-2" />EXECUTAR RODADA COMPLETA</>}
           </Button>
 
           {pendencias.length > 0 && (
@@ -499,7 +499,7 @@ export function DashboardClient() {
       {Object.values(agents).some(a => a.status !== 'waiting') && <section aria-label="Resultados disponíveis" className="space-y-4">
         <h2 className="font-semibold">Resultados disponíveis</h2>
         <p role="status" className="text-sm text-muted-foreground">{isRunning ? 'Análise em andamento. As conclusões aparecem conforme ficam disponíveis.' : analysisCompleted ? 'Análise finalizada. Confira as ressalvas e as fontes.' : 'A análise foi interrompida. Consulte os resultados disponíveis antes de tentar novamente.'}</p>
-        {['mestre', 'orientacoes', 'basile', 'advocado', 'cabeca', 'auditor'].filter(key => agents[key]?.status !== 'waiting').map(key => <details key={key} open={key === 'mestre'} className="rounded-lg border p-4"><summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2">{({ mestre: 'Síntese', orientacoes: 'Revisão independente', basile: 'Documentos e fatos', advocado: 'Argumentos contrários', cabeca: 'Perspectiva judicial', auditor: 'Suporte documental' } as Record<string, string>)[key]} — {getAgentStatusLabel(agents[key].status)}</summary><div className="pt-4"><AgentBody agent={agents[key]} /><div className="mt-3"><ExpandedView title={AGENTS.find(agent => agent.key === key)?.label ?? 'Resultado'}><AgentBody agent={agents[key]} expanded /></ExpandedView></div><Button variant="outline" className="mt-3" onClick={() => handleCopy(key, agents[key].content)} disabled={!agents[key].content}>{copiedAgent === key ? 'Copiado' : 'Copiar com fontes e ressalvas'}</Button></div></details>)}
+        {['mestre', 'orientacoes', 'basile', 'advocado', 'cabeca', 'auditor'].filter(key => agents[key]?.status !== 'waiting').map(key => <details key={key} open={key === 'mestre'} className="rounded-lg border p-4"><summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2">{({ mestre: 'MESTRE — Síntese Estratégica', orientacoes: 'ORIENTADOR — Revisor Independente', basile: 'OPERADOR — Investigador', advocado: 'ADVOGADO DO DIABO — Contraditório', cabeca: 'CABEÇA DO JUIZ — Perspectiva Judicial', auditor: 'AUDITOR DOCUMENTAL — Integridade' } as Record<string, string>)[key]} — {getAgentStatusLabel(agents[key].status)}</summary><div className="pt-4"><AgentBody agent={agents[key]} /><div className="mt-3"><ExpandedView title={AGENTS.find(agent => agent.key === key)?.label ?? 'Resultado'}><AgentBody agent={agents[key]} expanded /></ExpandedView></div><Button variant="outline" className="mt-3" onClick={() => handleCopy(key, agents[key].content)} disabled={!agents[key].content}>{copiedAgent === key ? 'Copiado' : 'Copiar com fontes e ressalvas'}</Button></div></details>)}
       </section>}
 
       {analysisCompleted && analysisId && <ConversationTable key={analysisId} analysisId={analysisId} />}
@@ -511,10 +511,10 @@ export function DashboardClient() {
 
 function getAgentStatusLabel(status: AgentResult['status']): string {
   switch (status) {
-    case 'waiting': return 'Aguardando'
-    case 'running': return 'Em andamento'
-    case 'done': return 'Resultado disponível'
-    case 'error': return 'Interrompido'
+    case 'waiting': return 'AGUARDANDO RODADA'
+    case 'running': return 'PROCESSANDO...'
+    case 'done': return 'CONCLUÍDO'
+    case 'error': return 'ERRO'
   }
 }
 

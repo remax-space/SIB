@@ -13,9 +13,9 @@ import { Textarea } from '@/components/ui/textarea'
 
 type Turn = { result?: Result; id: string; agent: string; message: string; content: string; createdAt: string }
 const participants = [
-  { id: 'mestre', label: 'Síntese', detail: 'Estratégia e decisões' },
-  { id: 'orientador', label: 'Revisão crítica', detail: 'Conferir a conclusão' },
-  { id: 'jurisprudencia', label: 'Pesquisa jurídica', detail: 'Interpretar fontes selecionadas' },
+  { id: 'mestre', label: 'Mestre', detail: 'Estratégia e decisões' },
+  { id: 'orientador', label: 'Orientador', detail: 'Revisão crítica' },
+  { id: 'jurisprudencia', label: 'Jurisprudência', detail: 'Interpretar fontes selecionadas' },
   { id: 'peca', label: 'Elaborar peça', detail: 'Minuta a partir das deliberações' },
 ]
 

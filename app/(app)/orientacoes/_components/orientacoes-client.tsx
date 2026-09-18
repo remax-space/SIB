@@ -30,7 +30,7 @@ export function OrientacoesClient() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Orientador"
+        title="ORIENTADOR"
         description="Revisor Independente — controle autônomo de erro de análise jurídica sobre a conclusão do MESTRE"
         actions={
           <LimparButton
