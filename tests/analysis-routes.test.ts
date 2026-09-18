@@ -30,6 +30,8 @@ async function harness(file: string, options: { foreign?: boolean; missing?: boo
     },
     'lib/storage': { readStoredFile: async () => { downloads++; if (options.unreadable) throw new Error('Original indisponível'); return bytes } },
     'lib/repo/research': {
+      assertCaseWritable: async () => undefined,
+      assertCaseWritableInTransaction: async () => undefined,
       listResearch: async () => [],
       ...Object.fromEntries(['createResearch', 'cachedResearch', 'claimResearch', 'finishResearch', 'readResearchResult', 'saveEvidence', 'markDispatched', 'saveResearchResult'].map(name => [name, async () => { throw new Error(`Pesquisa externa inesperada: ${name}`) }])),
       getEvidence: async () => options.evidence ? structuredClone(evidence) : null,
@@ -113,6 +115,19 @@ test('Basile recebe PDF para leitura visual quando não há camada textual', asy
     assert.equal(h.calls[0].documents[0].documentId, 'd1')
     assert.deepEqual(h.calls[0].documents[0].pages, [1])
     assert.ok(h.state.basileResult.cobertura_documental.paginas[0].processado)
+  } finally { h.dispose() }
+})
+
+test('falha em todas as páginas expõe o motivo no SSE e preserva a cobertura', async () => {
+  const h = await harness('app/api/analysis/run/route.ts', { scanned: true, failFirst: true })
+  try {
+    const response = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'], runMode: 'SOMENTE_BASILE' }))
+    const events: { status: string; message: string }[] = String(await response.text()).split('\n\n').filter(Boolean).map(line => JSON.parse(line.replace(/^data: /, '')))
+    assert.match(events.find(e => e.status === 'error')?.message ?? '', /Motivo: Falha simulada de interpretação/)
+    assert.equal(h.state.status, 'ERRO')
+    assert.match(h.state.errorDetail, /Falha simulada de interpretação/)
+    assert.equal(h.state.basileResult.cobertura_documental.paginas[0].processado, false)
+    assert.ok(!events.some(e => e.status === 'completed'))
   } finally { h.dispose() }
 })
 

@@ -154,7 +154,9 @@ export async function POST(request: NextRequest) {
                 onProgress: async result => { await updateAnalysis(analysis.id, { basileResult: result }); } })
             : parseJSON(await timedLLM({ provider: providerKey, system: basilePrompt.system, user: basilePrompt.user, model, json: true, label: 'BASILE' }));
           if (needsDocumentReview && !(basileResult.cobertura_documental as { paginas?: { processado: boolean }[] })?.paginas?.some(page => page.processado)) {
-            throw new Error('Nenhuma página do PDF pôde ser processada. Consulte as limitações documentais e verifique o provedor de IA.');
+            const coverage = basileResult.cobertura_documental as { paginas?: { limitacao?: string }[] };
+            const reason = coverage?.paginas?.find(page => page.limitacao)?.limitacao;
+            throw new Error(`Nenhuma página do PDF pôde ser processada.${reason ? ` Motivo: ${reason}` : ' Consulte as limitações documentais e verifique o provedor de IA.'}`);
           }
           const basileRaw = JSON.stringify(basileResult);
           if (needsDocumentReview) corpusText = `AVALIAÇÃO DOCUMENTAL DO BASILE (interpretação, não transcrição integral do PDF):\n${JSON.stringify(comparisonResult(basileResult))}`;

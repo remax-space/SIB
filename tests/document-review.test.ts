@@ -136,11 +136,29 @@ test('contratos HTTP: OpenAI Responses, Anthropic document e Gemini inline_data'
           assert.match(String(url), /\/responses$/)
           assert.equal(body.input[0].content[2].file_data, 'data:application/pdf;base64,cGRm')
           assert.equal(body.instructions, 'sistema')
+          assert.equal(body.text.format.type, 'json_object')
+          assert.match(body.input[0].content[0].text, /JSON/)
+          assert.match(body.input[0].content[0].text, /missão/)
         } else if (provider === 'anthropic') assert.equal(body.messages[0].content[1].source.data, 'cGRm')
         else assert.equal(body.contents[0].parts[1].inline_data.data, 'cGRm')
         return Response.json(provider === 'openai' ? { status: 'completed', output_text: '{"ok":true}' } : provider === 'anthropic' ? { stop_reason: 'end_turn', content: [{ text: '{"ok":true}' }] } : { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":true}' }] } }] })
       }
       assert.equal(await callLLM({ provider, model, system: 'sistema', user: 'missão', json: true, documents: [{ documentId: 'd', filename: 'd.pdf', sha256: 'hash', pages: [15], base64: 'cGRm' }] }), '{"ok":true}')
+    }
+  } finally { globalThis.fetch = savedFetch; process.env = savedEnv }
+})
+
+test('falhas de PDF da OpenAI preservam o motivo da rejeição e da resposta incompleta', async () => {
+  const savedFetch = globalThis.fetch, savedEnv = { ...process.env }
+  process.env.OPENAI_API_KEY = 'contract-test'
+  try {
+    for (const response of [
+      { status: 400, body: { error: { message: 'Input must contain json' } }, reason: /400.*Input must contain json/ },
+      { status: 200, body: { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } }, reason: /max_output_tokens/ },
+    ]) {
+      globalThis.fetch = async () => Response.json(response.body, { status: response.status })
+      await assert.rejects(callLLM({ provider: 'openai', model: 'gpt-4o', system: 'sistema', user: 'leia', json: true,
+        documents: [{ documentId: 'd', filename: 'd.pdf', sha256: 'hash', pages: [1], base64: 'cGRm' }] }), response.reason)
     }
   } finally { globalThis.fetch = savedFetch; process.env = savedEnv }
 })

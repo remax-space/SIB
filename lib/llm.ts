@@ -112,13 +112,17 @@ async function callOpenAI(opts: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + opts.apiKey },
       body: JSON.stringify({ model: opts.model, instructions: opts.system,
-        input: [{ role: 'user', content: [{ type: 'input_text', text: opts.user }, ...documentParts('openai', opts.documents)] }],
+        // Responses validates JSON mode against input messages, not instructions.
+        input: [{ role: 'user', content: [{ type: 'input_text', text: opts.json ? `${opts.user}\n\nResponda APENAS com JSON válido.` : opts.user }, ...documentParts('openai', opts.documents)] }],
         max_output_tokens: opts.maxTokens,
         ...(opts.json ? { text: { format: { type: 'json_object' } } } : {}),
       }),
     }, opts.timeoutMs)
     const data = await response.json()
-    if (!response.ok || data.status === 'incomplete' || data.error) throw new Error('OpenAI: documento não processado (' + response.status + ')')
+    if (!response.ok || data.status === 'incomplete' || data.error) {
+      const detail = String(data.error?.message ?? data.incomplete_details?.reason ?? 'Resposta documental inválida').slice(0, 300)
+      throw new Error(`OpenAI: documento não processado (${response.status}): ${detail}`)
+    }
     return data.output_text ?? (data.output ?? []).flatMap((item: any) => item.content ?? []).map((part: any) => part.text ?? '').join('\n')
   }
   const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
