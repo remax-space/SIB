@@ -34,6 +34,7 @@ export function assertSafeHttpsUrl(raw: string): URL {
   }
 
   const host = url.hostname.toLowerCase().replace(/\.+$/, '')
+  if (url.username || url.password || host.includes(':') || host.startsWith('[')) throw new Error('Endpoint de jurisprudência não permitido')
   if (BLOCKED_HOSTS.has(host) || host.endsWith('.local') || host.endsWith('.internal')) {
     throw new Error('Endpoint de jurisprudência não permitido')
   }

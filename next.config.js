@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /** @type {import('next').NextConfig} */
 const path = require('path');
 require('dotenv').config();
@@ -9,7 +10,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   outputFileTracingRoot: path.join(__dirname),
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: { unoptimized: true },
   // Next 16 BLOCKS unlisted origins on /_next/* and /__nextjs* in dev — including the /_next/hmr

@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteCase, getCaseById, updateCase } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
+import { ResearchError } from '@/lib/research/adapter';
+import { researchHttpError } from '@/lib/research/http';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -14,9 +16,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Caso não encontrado' }, { status: 404 });
     }
 
+    const analyses = ('analyses' in caseData ? caseData.analyses : []) as Array<Record<string, any>>;
     return NextResponse.json({
       ...caseData,
-      analyses: (caseData?.analyses ?? []).map((a: any) => ({
+      analyses: analyses.map((a: any) => ({
         ...a,
         icpScore: a?.icpScore != null ? Number(a.icpScore) : null,
       })),
@@ -48,6 +51,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     await deleteCase(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Case DELETE error:', error);
     return NextResponse.json({ error: 'Erro ao excluir caso' }, { status: 500 });
   }

@@ -1,5 +1,10 @@
 'use client'
 
+import { ResearchCitationAudit } from '@/components/research-citation-audit'
+import { LegalResearch } from '@/components/legal-research'
+import type { Evidence } from '@/lib/research/contracts'
+import { DocumentReview } from '@/components/document-review'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -19,6 +24,7 @@ import { StatusExplanation } from '@/components/status-explanation'
 
 export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; analysisId: string }) {
   const router = useRouter()
+  const [evidence, setEvidence] = useState<Evidence | null>(null)
   const [analysis, setAnalysis] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -162,8 +168,10 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
         </Card>
       )}
 
-      {analysis.status === 'CONCLUIDO' && <ConversationTable key={analysisId} analysisId={analysisId} initialTurns={analysis.conversation ?? []} />}
+      {analysis.status === 'CONCLUIDO' && <LegalResearch analysisId={analysisId} onEvidence={setEvidence} />}
+      {analysis.status === 'CONCLUIDO' && <ConversationTable evidence={evidence} key={analysisId} analysisId={analysisId} initialTurns={analysis.conversation ?? []} />}
 
+      {analysis.researchEvidenceUses?.length > 0 && <Card><CardHeader><CardTitle className="text-sm">Fontes recebidas pelos agentes</CardTitle></CardHeader><CardContent className="space-y-2">{analysis.researchEvidenceUses.map((receipt: { agent: string; sourceIds: string[]; evidenceId: string }, i: number) => <p key={i} className="text-xs break-words">{receipt.agent}: {receipt.sourceIds.join(', ')} · Pacote {receipt.evidenceId}</p>)}<p className="text-xs">Envio do pacote não comprova correção da interpretação ou das citações.</p></CardContent></Card>}
       {/* Agent Results Tabs */}
       {analysis?.status !== 'PENDENTE' && (
         <Tabs defaultValue="basile" className="space-y-4">
@@ -180,6 +188,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
           {/* OPERADOR */}
           <TabsContent value="basile">
+            <ResearchCitationAudit audit={basile.fontes_juridicas} />
             <SlideIn from="bottom">
               <div className="space-y-4">
                 {basile?.linha_estado_processual && (
@@ -294,6 +303,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
           {/* ADVOGADO DO DIABO */}
           <TabsContent value="advocado">
+            <ResearchCitationAudit audit={advocado.fontes_juridicas} />
             <SlideIn from="bottom">
               <div className="space-y-4">
                 {(advocado?.contra_argumentos?.length ?? 0) > 0 && (
@@ -346,6 +356,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
           {/* CABEÇA DO JUIZ */}
           <TabsContent value="cabeca">
+            <ResearchCitationAudit audit={cabeca.fontes_juridicas} />
             <SlideIn from="bottom">
               <div className="space-y-4">
                 {cabeca?.probabilidade_acolhimento && (
@@ -393,6 +404,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
           {/* AUDITOR */}
           <TabsContent value="auditor">
+            <ResearchCitationAudit audit={auditor.fontes_juridicas} />
             <SlideIn from="bottom">
               <div className="space-y-4">
                 {/* ICP Score Breakdown */}
@@ -458,8 +470,10 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
           {/* MESTRE */}
           <TabsContent value="mestre">
+            <ResearchCitationAudit audit={mestre.fontes_juridicas} />
             <SlideIn from="bottom">
               <div className="space-y-4">
+                <DocumentReview result={mestre} />
                 {mestre?.sintese_executiva && (
                   <Card className="border-primary/30"><CardHeader><CardTitle className="text-sm">🎯 Síntese Executiva</CardTitle></CardHeader>
                     <CardContent><p className="text-sm">{mestre.sintese_executiva}</p></CardContent>
@@ -529,6 +543,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
 
           {/* ORIENTAÇÕES — Revisor Independente */}
           <TabsContent value="orientacoes">
+            <ResearchCitationAudit audit={orientacoes.fontes_juridicas} />
             <SlideIn from="bottom">
               <div className="space-y-4">
                 <Card className="border-primary/30">
@@ -540,6 +555,7 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
                     )}
                   </CardContent>
                 </Card>
+                <DocumentReview result={orientacoes} />
                 {orientacoes?.parecer_geral && (
                   <Card><CardHeader><CardTitle className="text-sm">📝 Parecer Geral Independente</CardTitle></CardHeader>
                     <CardContent><p className="text-sm">{orientacoes.parecer_geral}</p></CardContent>

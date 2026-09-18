@@ -22,9 +22,9 @@ export async function saveExtractedText(documentId: string, text: string) {
   })
 }
 
-export async function readExtractedText(documentId: string): Promise<string | null> {
+export async function readExtractedText(documentId: string, storedPath?: string): Promise<string | null> {
   try {
-    const [buf] = await getBucket().file(extractedTextPath(documentId)).download()
+    const [buf] = await getBucket().file(storedPath ?? extractedTextPath(documentId)).download()
     return buf.toString('utf8')
   } catch (err: any) {
     if (err?.code === 404 || /bucket does not exist/i.test(String(err?.message ?? ''))) return null
@@ -35,14 +35,16 @@ export async function readExtractedText(documentId: string): Promise<string | nu
 export async function deleteExtractedText(documentId: string) {
   try {
     await getBucket().file(extractedTextPath(documentId)).delete({ ignoreNotFound: true })
+    const [versions] = await getBucket().getFiles({ prefix: `extracted/${documentId}/` })
+    await Promise.all(versions.map(file => file.delete({ ignoreNotFound: true })))
   } catch {
     /* ignore */
   }
 }
 
-export async function storeLargeJson(analysisId: string, field: string, value: unknown) {
+export async function storeLargeJson(analysisId: string, field: string, value: unknown, forceStorage = false) {
   const json = JSON.stringify(value ?? null)
-  if (!json || json.length < MAX_INLINE_JSON) {
+  if (!forceStorage && (!json || Buffer.byteLength(json) < MAX_INLINE_JSON)) {
     return { stored: value, pointer: null as string | null }
   }
   const path = analysisFieldPath(analysisId, field)

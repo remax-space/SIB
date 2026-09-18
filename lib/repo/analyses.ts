@@ -39,13 +39,16 @@ async function hydrateResults(data: Record<string, unknown>) {
   for (const field of RESULT_FIELDS) {
     if (next[field] != null) next[field] = await readLargeJson(next[field])
   }
+  if (Array.isArray(next.conversation)) next.conversation = await Promise.all(next.conversation.map(async turn => ({ ...turn, ...(turn.documentaryResult ? { documentaryResult: await readLargeJson(turn.documentaryResult) } : {}) })))
   return next
 }
 
-function toAnalysis(id: string, data: Record<string, unknown>) {
+function toAnalysis(id: string, data: Record<string, unknown>): Record<string, unknown> & { id: string; missionLiteral: string; icpScore: number | null } {
   const serialized = serializeDoc(id, data) as Record<string, unknown>
   return {
     ...serialized,
+    id,
+    missionLiteral: String(serialized.missionLiteral ?? ''),
     icpScore: serialized.icpScore != null ? Number(serialized.icpScore) : null,
   }
 }
@@ -87,6 +90,8 @@ export async function getAnalysisById(id: string, includeCase = false) {
 
 export async function createAnalysis(input: {
   caseId: string
+  evidenceId?: string
+  parentAnalysisId?: string
   jobId: string
   missionLiteral: string
   authorizedProduct?: string | null
@@ -118,6 +123,7 @@ export async function createAnalysis(input: {
     if (!existing.empty) throw new UniqueConstraintError('Já existe uma análise com este jobId')
     tx.set(ref, {
       caseId: input.caseId,
+      ...(input.evidenceId ? { evidenceId: input.evidenceId, parentAnalysisId: input.parentAnalysisId ?? null } : {}),
       jobId: input.jobId,
       missionLiteral: input.missionLiteral,
       authorizedProduct: input.authorizedProduct ?? null,

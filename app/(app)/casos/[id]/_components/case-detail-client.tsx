@@ -292,7 +292,8 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
         {/* ANALYSES TAB */}
         <TabsContent value="analyses">
           <div className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              {caseData?.analyses?.find((a: { status: string }) => a.status === 'CONCLUIDO') && <Link href={'/jurisprudencia?analysisId=' + caseData.analyses.find((a: { status: string }) => a.status === 'CONCLUIDO').id}><Button size="sm" variant="outline">Pesquisa jurídica — Legaw</Button></Link>}
               <Link href={`/casos/${caseId}/analise/nova`}>
                 <Button size="sm"><Plus className="w-4 h-4 mr-1" />Nova Análise</Button>
               </Link>

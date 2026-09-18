@@ -1,3 +1,4 @@
+import { deleteCaseResearch } from './research'
 import { Timestamp } from 'firebase-admin/firestore'
 import { getDb } from '@/lib/firebase/admin'
 import { serializeDoc } from '@/lib/firebase/serialize'
@@ -21,7 +22,9 @@ const CASE_FIELDS = [
   'cutoffDate',
 ] as const
 
-function toCase(id: string, data: Record<string, unknown>) {
+type CaseRecord = Record<string, unknown> & { id: string; _count: { documents: number; analyses: number } }
+
+function toCase(id: string, data: Record<string, unknown>): CaseRecord {
   const serialized = serializeDoc(id, data) as Record<string, unknown>
   const documentCount = Number(serialized.documentCount ?? 0)
   const analysisCount = Number(serialized.analysisCount ?? 0)
@@ -30,7 +33,7 @@ function toCase(id: string, data: Record<string, unknown>) {
   return {
     ...serialized,
     _count: { documents: documentCount, analyses: analysisCount },
-  }
+  } as CaseRecord
 }
 
 export async function listCases(filters: { status?: string | null; classText?: string | null } = {}) {
@@ -118,6 +121,7 @@ export async function updateCase(id: string, input: Record<string, unknown>) {
 }
 
 export async function deleteCase(id: string) {
+  await deleteCaseResearch(id)
   const [documents, analyses] = await Promise.all([
     listDocumentsByCase(id, false),
     listAnalysesByCase(id),

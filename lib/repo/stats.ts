@@ -18,7 +18,7 @@ export async function getDashboardStats() {
     getDb().collection('analyses').orderBy('createdAt', 'desc').limit(5).get(),
   ])
 
-  const recentCases = recentCaseRows.slice(0, 5).map((row) => ({
+  const recentCases = recentCaseRows.slice(0, 5).map((row: any) => ({
     id: row.id,
     caseId: row.caseId,
     title: row.title,

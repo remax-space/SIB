@@ -1,5 +1,7 @@
 'use client'
 
+import { DocumentReview } from '@/components/document-review'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -132,6 +134,7 @@ export function OrientacoesClient() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
+                <DocumentReview result={ori} />
                 {ori?.parecer_geral && (
                   <p className="text-sm text-muted-foreground">{ori.parecer_geral}</p>
                 )}
@@ -154,7 +157,7 @@ export function OrientacoesClient() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-success">Nenhum erro de análise jurídica detectado.</p>
+                  <p className="text-xs text-success">Nenhum erro relatado nesta resposta; isso não comprova ausência de erros.</p>
                 )}
 
                 {ori?.recomendacao_final && (

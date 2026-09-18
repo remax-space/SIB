@@ -1,3 +1,4 @@
+import { documentParts, supportsPdf, type LlmDocument } from './llm-documents'
 export const LLM_PROVIDERS = ['openai', 'anthropic', 'gemini'] as const
 export type LlmProvider = (typeof LLM_PROVIDERS)[number]
 
@@ -79,7 +80,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 120_000): P
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), ms)
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    // Keep the deadline active while receiving the body, not only the headers.
+    const body = await response.arrayBuffer()
+    return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers })
   } finally {
     clearTimeout(timeout)
   }
@@ -100,7 +104,23 @@ async function callOpenAI(opts: {
   user: string
   json?: boolean
   maxTokens: number
+  documents?: LlmDocument[]
+  timeoutMs?: number
 }): Promise<string> {
+  if (opts.documents?.length) {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + opts.apiKey },
+      body: JSON.stringify({ model: opts.model, instructions: opts.system,
+        input: [{ role: 'user', content: [{ type: 'input_text', text: opts.user }, ...documentParts('openai', opts.documents)] }],
+        max_output_tokens: opts.maxTokens,
+        ...(opts.json ? { text: { format: { type: 'json_object' } } } : {}),
+      }),
+    }, opts.timeoutMs)
+    const data = await response.json()
+    if (!response.ok || data.status === 'incomplete' || data.error) throw new Error('OpenAI: documento não processado (' + response.status + ')')
+    return data.output_text ?? (data.output ?? []).flatMap((item: any) => item.content ?? []).map((part: any) => part.text ?? '').join('\n')
+  }
   const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -116,10 +136,11 @@ async function callOpenAI(opts: {
       max_tokens: opts.maxTokens,
       ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
     }),
-  })
+  }, opts.timeoutMs)
   const raw = await response.text()
   if (!response.ok) throw new Error(`OpenAI (${response.status}): ${raw.slice(0, 300)}`)
   const data = JSON.parse(raw)
+  if (data?.choices?.[0]?.finish_reason === 'length' || data?.choices?.[0]?.message?.refusal) throw new Error('Resposta OpenAI truncada ou recusada')
   return data?.choices?.[0]?.message?.content ?? '{}'
 }
 
@@ -130,6 +151,8 @@ async function callAnthropic(opts: {
   user: string
   json?: boolean
   maxTokens: number
+  documents?: LlmDocument[]
+  timeoutMs?: number
 }): Promise<string> {
   const system = opts.json
     ? `${opts.system}\n\nResponda APENAS com JSON válido, sem markdown.`
@@ -145,12 +168,13 @@ async function callAnthropic(opts: {
       model: opts.model,
       max_tokens: opts.maxTokens,
       system,
-      messages: [{ role: 'user', content: opts.user }],
+      messages: [{ role: 'user', content: opts.documents?.length ? [...documentParts('anthropic', opts.documents), { type: 'text', text: opts.user }] : opts.user }],
     }),
-  })
+  }, opts.timeoutMs)
   const raw = await response.text()
   if (!response.ok) throw new Error(`Claude (${response.status}): ${raw.slice(0, 300)}`)
   const data = JSON.parse(raw)
+  if (data.stop_reason === 'max_tokens') throw new Error('Resposta documental truncada')
   const text = (data?.content ?? []).map((part: any) => part?.text ?? '').join('\n')
   return text || '{}'
 }
@@ -162,6 +186,8 @@ async function callGemini(opts: {
   user: string
   json?: boolean
   maxTokens: number
+  documents?: LlmDocument[]
+  timeoutMs?: number
 }): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(opts.model)}:generateContent?key=${encodeURIComponent(opts.apiKey)}`
   const response = await fetchWithTimeout(url, {
@@ -169,16 +195,17 @@ async function callGemini(opts: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: opts.system }] },
-      contents: [{ role: 'user', parts: [{ text: opts.user }] }],
+      contents: [{ role: 'user', parts: [...documentParts('gemini', opts.documents ?? []), { text: opts.user }] }],
       generationConfig: {
         maxOutputTokens: opts.maxTokens,
         ...(opts.json ? { responseMimeType: 'application/json' } : {}),
       },
     }),
-  })
+  }, opts.timeoutMs)
   const raw = await response.text()
   if (!response.ok) throw new Error(`Gemini (${response.status}): ${raw.slice(0, 300)}`)
   const data = JSON.parse(raw)
+  if (data?.candidates?.[0]?.finishReason !== 'STOP') throw new Error('Resposta Gemini incompleta ou bloqueada')
   const text = (data?.candidates?.[0]?.content?.parts ?? []).map((part: any) => part?.text ?? '').join('\n')
   return text || '{}'
 }
@@ -191,26 +218,29 @@ export async function callLLM(opts: {
   json?: boolean
   maxTokens?: number
   label?: string
+  documents?: LlmDocument[]
+  timeoutMs?: number
 }): Promise<string> {
   const provider = firstConfiguredProvider(opts.provider)
   const apiKey = getProviderApiKey(provider)
   const model = getProviderModel(provider, opts.model)
   const maxTokens = opts.maxTokens ?? 8000
   const label = opts.label ?? 'Agente'
+  if (opts.documents?.length && !supportsPdf(provider, model)) throw new Error('Modelo sem suporte PDF confirmado; utilize leitura textual por página.')
 
   try {
     let text = ''
     if (provider === 'openai') {
-      text = await callOpenAI({ apiKey, model, system: opts.system, user: opts.user, json: opts.json, maxTokens })
+      text = await callOpenAI({ apiKey, model, system: opts.system, user: opts.user, json: opts.json, maxTokens, documents: opts.documents, timeoutMs: opts.timeoutMs })
     } else if (provider === 'anthropic') {
-      text = await callAnthropic({ apiKey, model, system: opts.system, user: opts.user, json: opts.json, maxTokens })
+      text = await callAnthropic({ apiKey, model, system: opts.system, user: opts.user, json: opts.json, maxTokens, documents: opts.documents, timeoutMs: opts.timeoutMs })
     } else {
-      text = await callGemini({ apiKey, model, system: opts.system, user: opts.user, json: opts.json, maxTokens })
+      text = await callGemini({ apiKey, model, system: opts.system, user: opts.user, json: opts.json, maxTokens, documents: opts.documents, timeoutMs: opts.timeoutMs })
     }
     return opts.json ? unwrapJsonish(text) : text
   } catch (error: any) {
     if (error?.name === 'AbortError') {
-      throw new Error(`${label}: tempo limite excedido (120s) ao consultar a IA.`)
+      throw new Error(`${label}: tempo limite excedido (${Math.ceil((opts.timeoutMs ?? 120_000) / 1000)}s) ao consultar a IA.`)
     }
     const message = String(error?.message ?? error)
     throw new Error(`${label}: ${message}`)

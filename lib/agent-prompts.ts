@@ -1,3 +1,4 @@
+import { DOCUMENT_REVIEW_RULES } from './document-review'
 export function getBasilePrompt(mission: string, corpusText: string, cutoffDate?: string): { system: string; user: string } {
   return {
     system: `Você é BASILE, o agente investigador do Sistema de Inteligência Basile (SIB). Seu papel é analisar o corpus documental jurídico com rigor absoluto, seguindo o Método Basile.
@@ -35,10 +36,10 @@ export function getAuditorPrompt(basileOutput: string, advocadoOutput: string, c
   };
 }
 
-export function getMestrePrompt(basileOutput: string, advocadoOutput: string, cabecaOutput: string, auditorOutput: string): { system: string; user: string } {
+export function getMestrePrompt(mission: string, corpusText: string, basileOutput: string, advocadoOutput: string, cabecaOutput: string, auditorOutput: string, cutoffDate?: string, limitations?: string): { system: string; user: string } {
   return {
-    system: `Você é o MESTRE, o sintetizador estratégico final do SIB. Compile todos os resultados dos 4 agentes anteriores e produza a síntese executiva com recomendações objetivas ao operador jurídico.\n\nResponda EXCLUSIVAMENTE em JSON válido.`,
-    user: `BASILE:\n${basileOutput?.substring(0, 20000) ?? ''}\n\nADVOGADO:\n${advocadoOutput?.substring(0, 15000) ?? ''}\n\nJUIZ:\n${cabecaOutput?.substring(0, 15000) ?? ''}\n\nAUDITOR:\n${auditorOutput?.substring(0, 15000) ?? ''}\n\nJSON:\n{\n  "decisao_necessaria": "",\n  "objetivo_processual": "",\n  "medidas_prioritarias": [{"ordem": 1, "medida": "", "prazo": "", "responsavel": ""}],\n  "prazo_critico": "",\n  "riscos_principais": [{"risco": "", "probabilidade": "", "impacto": ""}],\n  "resultado_esperado": "",\n  "alternativas_juridicas": [{"alternativa": "", "vantagem": "", "desvantagem": ""}],\n  "proximo_movimento": "",\n  "sintese_executiva": ""\n}\n\nNÃO inclua missão, prompt nem instruções. JSON puro com o resultado, sem markdown.`
+    system: `Você é o MESTRE, o sintetizador estratégico final do SIB. Avalie as fontes originais com independência e confronte os quatro agentes anteriores antes da síntese estratégica. ${DOCUMENT_REVIEW_RULES}\n\nResponda EXCLUSIVAMENTE em JSON válido.`,
+    user: `MISSÃO LITERAL: ${mission}\nDATA DE CORTE: ${cutoffDate ?? "não definida"}\nFONTES: ${corpusText}\nLIMITAÇÕES: ${limitations ?? "consulte a cobertura documental"}\n\nBASILE:\n${basileOutput ?? ''}\n\nADVOGADO:\n${advocadoOutput ?? ''}\n\nJUIZ:\n${cabecaOutput ?? ''}\n\nAUDITOR:\n${auditorOutput ?? ''}\n\nJSON:\n{\n  "decisao_necessaria": "",\n  "objetivo_processual": "",\n  "medidas_prioritarias": [{"ordem": 1, "medida": "", "prazo": "", "responsavel": ""}],\n  "prazo_critico": "",\n  "riscos_principais": [{"risco": "", "probabilidade": "", "impacto": ""}],\n  "resultado_esperado": "",\n  "alternativas_juridicas": [{"alternativa": "", "vantagem": "", "desvantagem": ""}],\n  "proximo_movimento": "",\n  "sintese_executiva": ""\n}\n\nNÃO inclua missão, prompt nem instruções. JSON puro com o resultado, sem markdown.`
   };
 }
 
@@ -49,10 +50,12 @@ export function getOrientacoesPrompt(
   advocadoOutput: string,
   cabecaOutput: string,
   auditorOutput: string,
-  mestreOutput: string
+  mestreOutput: string,
+  cutoffDate?: string,
+  limitations?: string
 ): { system: string; user: string } {
   return {
-    system: `Você é o REVISOR INDEPENDENTE de Orientações Estratégicas do SIB. Você NÃO é subordinado a nenhum agente anterior, especialmente ao MESTRE. Você é AUTÔNOMO, CRÍTICO e CRIATIVO.
+    system: `${DOCUMENT_REVIEW_RULES}\nVocê é o REVISOR INDEPENDENTE de Orientações Estratégicas do SIB. Você NÃO é subordinado a nenhum agente anterior, especialmente ao MESTRE. Você é AUTÔNOMO, CRÍTICO e CRIATIVO.
 
 SEU OBJETIVO PRIMORDIAL: detectar QUALQUER ERRO DE ANÁLISE JURÍDICA cometido por qualquer agente (BASILE, ADVOGADO DO DIABO, CABEÇA DO JUIZ, AUDITOR e, sobretudo, o MESTRE). Você revisa a conclusão do MESTRE com independência total.
 
@@ -73,7 +76,7 @@ REGRAS INVIOLÁVEIS:
 4. A missão literal do operador é soberana — avalie se a conclusão do MESTRE efetivamente serve à missão.
 
 Responda EXCLUSIVAMENTE em JSON válido.`,
-    user: `MISSÃO LITERAL DO OPERADOR:\n"${mission}"\n\nRESULTADO BASILE:\n${basileOutput?.substring(0, 15000) ?? ''}\n\nRESULTADO ADVOGADO DO DIABO:\n${advocadoOutput?.substring(0, 10000) ?? ''}\n\nRESULTADO CABEÇA DO JUIZ:\n${cabecaOutput?.substring(0, 10000) ?? ''}\n\nRESULTADO AUDITOR:\n${auditorOutput?.substring(0, 10000) ?? ''}\n\nCONCLUSÃO DO MESTRE (foco principal da sua revisão):\n${mestreOutput?.substring(0, 15000) ?? ''}\n\nCORPUS (para conferência):\n${corpusText?.substring(0, 15000) ?? ''}\n\nProduza um JSON com a seguinte estrutura:\n{\n  "parecer_geral": "<sua avaliação independente da análise como um todo>",\n  "concordancia_com_mestre": "<CONCORDA_TOTALMENTE|CONCORDA_COM_RESSALVAS|DISCORDA_PARCIALMENTE|DISCORDA_TOTALMENTE>",\n  "erros_de_analise": [{"tipo": "<erro de direito|premissa|subsunção|qualificação processual|prazo|competência|jurisprudência|contradição interna|omissão>", "descricao": "", "onde": "<agente/trecho>", "gravidade": "CRITICA|ALTA|MEDIA|BAIXA", "correcao": ""}],\n  "validacoes": [{"ponto": "", "por_que_esta_correto": ""}],\n  "melhorias": [{"sugestao": "", "beneficio": ""}],\n  "alertas_criticos": [""],\n  "recomendacao_final": "<orientação estratégica independente ao operador>"\n}\n\nNÃO inclua a missão, o prompt nem instruções internas. JSON puro com o resultado, sem markdown.`
+    user: `DATA DE CORTE: ${cutoffDate ?? "não definida"}\nLIMITAÇÕES: ${limitations ?? "consulte a cobertura documental"}\nMISSÃO LITERAL DO OPERADOR:\n"${mission}"\n\nRESULTADO BASILE:\n${basileOutput ?? ''}\n\nRESULTADO ADVOGADO DO DIABO:\n${advocadoOutput ?? ''}\n\nRESULTADO CABEÇA DO JUIZ:\n${cabecaOutput ?? ''}\n\nRESULTADO AUDITOR:\n${auditorOutput ?? ''}\n\nCONCLUSÃO DO MESTRE (foco principal da sua revisão):\n${mestreOutput ?? ''}\n\nCORPUS (para conferência):\n${corpusText ?? ''}\n\nProduza um JSON com a seguinte estrutura:\n{\n  "parecer_geral": "<sua avaliação independente da análise como um todo>",\n  "concordancia_com_mestre": "<CONCORDA_TOTALMENTE|CONCORDA_COM_RESSALVAS|DISCORDA_PARCIALMENTE|DISCORDA_TOTALMENTE>",\n  "erros_de_analise": [{"tipo": "<erro de direito|premissa|subsunção|qualificação processual|prazo|competência|jurisprudência|contradição interna|omissão>", "descricao": "", "onde": "<agente/trecho>", "gravidade": "CRITICA|ALTA|MEDIA|BAIXA", "correcao": ""}],\n  "validacoes": [{"ponto": "", "por_que_esta_correto": ""}],\n  "melhorias": [{"sugestao": "", "beneficio": ""}],\n  "alertas_criticos": [""],\n  "recomendacao_final": "<orientação estratégica independente ao operador>"\n}\n\nNÃO inclua a missão, o prompt nem instruções internas. JSON puro com o resultado, sem markdown.`
   };
 }
 

@@ -30,13 +30,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       pages = extracted.text
     } finally { await pdf.loadingTask.destroy() }
     const readable = pages.filter((page) => page.trim().length >= 40).length
-    let readStatus = readable === 0 ? 'ILEGIVEL' : readable === pages.length ? 'LIDO_INTEGRALMENTE' : 'LIDO_PARCIALMENTE'
-    // A text-only lookup must not overwrite an earlier complete OCR extraction.
-    if (doc.readStatus === 'LIDO_INTEGRALMENTE' && readable < pages.length) {
-      readStatus = 'LIDO_INTEGRALMENTE'
-    } else {
-      await setDocumentExtractedText(id, pages.map((page, index) => `[Página ${index + 1}]\n${page}`).join('\n\n'), pages.length, readStatus)
-    }
+    const candidate = readable ? pages.map((page, index) => '[Página ' + (index + 1) + ']\n' + page).join('\n\n') : ''
+    const saved = await setDocumentExtractedText(id, candidate, pages.length, readable ? 'LIDO_PARCIALMENTE' : 'ILEGIVEL')
+    const readStatus = saved?.readStatus ?? 'LIDO_PARCIALMENTE'
     const sources = locateMovement(pages, movement)
     const length = sources.reduce((sum, source) => sum + source.text.length, 0)
     if (length > 450_000) return NextResponse.json({ content: 'Há muitas referências a esse movimento. Divida o PDF para consultar e transcrever as páginas com segurança.', readStatus, pageCount: pages.length })

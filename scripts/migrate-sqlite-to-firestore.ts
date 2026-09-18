@@ -74,8 +74,8 @@ async function main() {
   }
 
   for (const item of cases) {
-    const documentCount = documents.filter((d) => d.caseId === item.id).length
-    const analysisCount = analyses.filter((a) => a.caseId === item.id).length
+    const documentCount = documents.filter((d: { caseId: string }) => d.caseId === item.id).length
+    const analysisCount = analyses.filter((a: { caseId: string }) => a.caseId === item.id).length
     await db.collection('cases').doc(item.id).set({
       caseId: item.caseId,
       title: item.title,

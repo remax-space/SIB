@@ -26,5 +26,5 @@ export function serializeDoc<T extends Record<string, unknown> = Record<string, 
   return {
     id,
     ...(serializeValue(data ?? {}) as Record<string, unknown>),
-  } as T
+  } as unknown as T
 }

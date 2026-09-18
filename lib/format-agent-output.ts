@@ -1,3 +1,4 @@
+import { formatDocumentReview } from './format-document-review'
 const HIDDEN_KEYS = new Set([
   'missao_registrada',
   'registros_obediencia',
@@ -448,6 +449,7 @@ export function formatAgentOutput(data: any, agent?: string): string {
       text = formatGeneric(obj)
   }
 
+  if (obj.cobertura_documental) text = [formatDocumentReview(obj), text].filter(Boolean).join('\n\n')
   if (text.trim()) return text.trim()
   return formatGeneric(obj).trim()
 }

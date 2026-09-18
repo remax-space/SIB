@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { getBucket } from '@/lib/firebase/admin'
+import { textAvailability, shouldPreserveExtraction, type ExtractionInfo } from '@/lib/extraction-integrity'
 import { Timestamp } from 'firebase-admin/firestore'
 import { getDb } from '@/lib/firebase/admin'
 import { serializeDoc } from '@/lib/firebase/serialize'
@@ -7,7 +10,6 @@ import {
   deleteExtractedText,
   previewText,
   readExtractedText,
-  saveExtractedText,
 } from './text-store'
 import { deleteStoredFile } from '@/lib/storage'
 
@@ -24,21 +26,27 @@ const DOCUMENT_FIELDS = [
   'pageCount',
 ] as const
 
-function toDocument(id: string, data: Record<string, unknown>, extractedText?: string | null) {
+function toDocument(id: string, data: Record<string, unknown>, extractedText?: string | null, readFailed = false): Record<string, unknown> & { id: string; extractedText: string; textSource: string } {
   const serialized = serializeDoc(id, data) as Record<string, unknown>
-  const preview = typeof serialized.extractedTextPreview === 'string' ? serialized.extractedTextPreview : ''
+  const availability = textAvailability(serialized, extractedText, readFailed)
   delete serialized.extractedTextPreview
   return {
     ...serialized,
-    extractedText: extractedText ?? preview ?? null,
+    id,
+    ...availability,
   }
 }
 
 export async function getDocumentById(id: string, withText = false) {
   const snap = await getDb().collection(COLLECTION).doc(id).get()
   if (!snap.exists) return null
-  const text = withText ? await readExtractedText(id) : null
-  return toDocument(snap.id, snap.data() ?? {}, text)
+  const data = snap.data() ?? {}
+  try {
+    const text = withText ? await readExtractedText(id, data.extractedTextPath) : null
+    return toDocument(snap.id, data, text)
+  } catch {
+    return toDocument(snap.id, data, null, true)
+  }
 }
 
 export async function listDocumentsByCase(caseId: string, withText = false) {
@@ -50,8 +58,10 @@ export async function listDocumentsByCase(caseId: string, withText = false) {
 
   return Promise.all(
     snap.docs.map(async (doc) => {
-      const text = withText ? await readExtractedText(doc.id) : null
-      return toDocument(doc.id, doc.data(), text)
+      try {
+        const text = withText ? await readExtractedText(doc.id, doc.data().extractedTextPath) : null
+        return toDocument(doc.id, doc.data(), text)
+      } catch { return toDocument(doc.id, doc.data(), null, true) }
     })
   )
 }
@@ -114,30 +124,43 @@ export async function updateDocument(id: string, input: Record<string, unknown>)
     if (input[field] !== undefined) data[field] = input[field]
   }
   if (typeof input.extractedText === 'string') {
-    try {
-      await saveExtractedText(id, input.extractedText)
-    } catch (err) {
-      console.warn('Firebase Storage indisponível ao gravar extractedText:', err)
-    }
-    data.extractedTextPreview = previewText(input.extractedText)
-    data.textLength = input.extractedText.length
+    await setDocumentExtractedText(id, input.extractedText, typeof input.pageCount === 'number' ? input.pageCount : null, 'LIDO_PARCIALMENTE')
+    delete data.readStatus
+    delete data.pageCount
   }
 
   if (Object.keys(data).length) await ref.update(data)
   return getDocumentById(id, true)
 }
 
-export async function setDocumentExtractedText(id: string, extractedText: string, pageCount: number, readStatus: string) {
+export async function setDocumentExtractedText(id: string, extractedText: string, pageCount: number | null, _readStatus: string, info?: ExtractionInfo) {
+  const ref = getDb().collection(COLLECTION).doc(id)
+  const before = await ref.get()
+  if (!before.exists) return null
+  const data = before.data() ?? {}
+  // Do not replace a valid version if its storage cannot currently be read.
+  let previous: string | null
+  try { previous = await readExtractedText(id, data.extractedTextPath) }
+  catch (error) { await ref.update({ storageStatus: 'READ_FAILED' }); throw error }
+  if (shouldPreserveExtraction(previous, extractedText, data.extractionInfo, info)) return getDocumentById(id, true)
+  const path = 'extracted/' + id + '/' + randomUUID() + '.txt'
   try {
-    await saveExtractedText(id, extractedText)
-  } catch (err) {
-    console.warn('Firebase Storage indisponível ao gravar extractedText:', err)
+    await getBucket().file(path).save(extractedText, { contentType: 'text/plain; charset=utf-8', resumable: false })
+  } catch (error) {
+    await ref.update({ storageStatus: 'WRITE_FAILED' })
+    throw error
   }
-  await getDb().collection(COLLECTION).doc(id).update({
-    extractedTextPreview: previewText(extractedText),
-    textLength: extractedText.length,
-    pageCount,
-    readStatus,
+  // Immutable text blob first, then atomic metadata pointer; concurrent retries cannot overwrite it.
+  await getDb().runTransaction(async tx => {
+    const current = await tx.get(ref)
+    if (current.updateTime?.isEqual(before.updateTime!)) {
+      tx.update(ref, {
+        extractedTextPath: path, extractedTextPreview: previewText(extractedText), textLength: extractedText.length,
+        pageCount, readStatus: extractedText.trim() ? 'LIDO_PARCIALMENTE' : 'ILEGIVEL',
+        extractionStatus: extractedText.trim() ? 'PARTIAL' : 'NO_TEXT', storageStatus: 'STORED',
+        extractionInfo: info ?? { pageCount, textPages: [], emptyPages: [], status: extractedText.trim() ? 'PARTIAL' : 'NO_TEXT', method: 'UNKNOWN' },
+      })
+    } else { throw new Error('Extração atualizada em outra sessão; versão anterior preservada.') }
   })
   return getDocumentById(id, true)
 }

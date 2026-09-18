@@ -5,7 +5,10 @@ import { ReactNode, useEffect, useState } from 'react'
 /** True only after the component has mounted on the client. Use to gate browser-only values. */
 export function useMounted(): boolean {
   const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMounted(true), 0)
+    return () => window.clearTimeout(timer)
+  }, [])
   return mounted
 }
 

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteAnalysisRecord, getAnalysisById } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
+import { getEvidenceUses } from '@/lib/repo/research';
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -28,6 +29,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({
       ...analysis,
+      ...(analysis?.evidenceId ? { researchEvidenceUses: await getEvidenceUses(id) } : {}),
       icpScore: analysis?.icpScore != null ? Number(analysis.icpScore) : null,
     });
   } catch (error: any) {
