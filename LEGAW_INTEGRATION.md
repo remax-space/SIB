@@ -1,5 +1,11 @@
 # Legaw MCP no SIB
 
+## Contexto automático nas buscas
+
+Jurisprudência e legislação recebem contexto montado no servidor: identificação/classe do processo, missão (priorizando o complemento do operador), objetivo, conclusões do Basile, Mestre e Orientador, até quatro intervenções recentes da mesa, trechos disponíveis dos documentos e até três consultas anteriores distintas desta análise. Pergunta, fatos, tema e objetivo adicional são opcionais e complementam o contexto. Nenhuma IA ou pesquisa externa é acionada para montar esse texto.
+
+O texto é condensado por seções em até 2.000 caracteres e mostrado integralmente na revisão. Não equivale a transmitir todos os autos: trechos e histórico têm limites explícitos e interpretações não são apresentadas como prova. Documento sem extração gera aviso. A confirmação usa exatamente o texto persistido; mudanças na análise/conversa invalidam a revisão, e o cache considera os parâmetros efetivamente enviados. Inteiro teor e conferência de citações mantêm seus parâmetros específicos.
+
 ## Configuração
 
 1. Na Legaw, abra **Conexões → Chaves de integração** e crie uma chave.

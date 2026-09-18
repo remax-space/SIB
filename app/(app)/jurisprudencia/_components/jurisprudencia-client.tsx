@@ -210,8 +210,8 @@ export function JurisprudenciaClient() {
         </CardContent>
       </Card>
 
-      {selectedId && <LegalResearch key={selectedId} analysisId={selectedId} onEvidence={setEvidence} />}
-      {selectedAnalysis?.status === 'CONCLUIDO' && <ConversationTable key={selectedId} analysisId={selectedId} initialTurns={selectedAnalysis.conversation ?? []} evidence={evidence} />}
+      {selectedId && <LegalResearch key={`research-${selectedId}`} analysisId={selectedId} onEvidence={setEvidence} />}
+      {selectedAnalysis?.status === 'CONCLUIDO' && <ConversationTable key={`conversation-${selectedId}`} analysisId={selectedId} initialTurns={selectedAnalysis.conversation ?? []} evidence={evidence} />}
       {/* Resultado */}
       {result && (
         <JurisprudenciaResult

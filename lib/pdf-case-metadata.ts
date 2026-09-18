@@ -49,9 +49,10 @@ const CLASS_ALIASES: Record<string, string[]> = {
 }
 
 const CLIENT_LABELS = [
-  'polo ativo',
   'nome do cliente',
   'cliente',
+  'parte representada',
+  'polo ativo',
   'autor',
   'autora',
   'requerente',
@@ -105,6 +106,8 @@ export function formatCnj(input: string): string {
 }
 
 export function extractCnjFromText(text: string): string {
+  const labeled = text.match(/(?:processo(?:\s+(?:principal|judicial))?|autos|case\s*id)\s*(?:n[º°o.]*)?\s*[:#–—-]?\s*(\d{7}\s*[-.]?\s*\d{2}\s*\.?\s*\d{4}\s*\.?\s*\d\s*\.?\s*\d{2}\s*\.?\s*\d{4})(?!\d)/i)
+  if (labeled?.[1]) return formatCnj(labeled[1])
   const prettyMatches = [...text.matchAll(CNJ_PRETTY_RE)].map((match) => formatCnj(match[1] ?? ''))
   const found = prettyMatches.find(Boolean)
   if (found) return found
@@ -117,6 +120,11 @@ export function extractCnjFromText(text: string): string {
 }
 
 export function extractLegalClassFromText(text: string): string {
+  const explicit = text.match(/\bclasse(?:\s+(?:processual|judicial))?(?:\s+da\s+a[çc][ãa]o)?\s*[:–—-]?\s*([^\n\r|;]{3,140})/i)
+  if (explicit?.[1]) {
+    const value = explicit[1].split(/\s+(?:assunto|[óo]rg[ãa]o|autor|requerente|processo|compet[êe]ncia)\s*:/i)[0].replace(/^\s*\d+\s*[-–—:]\s*/, '').trim()
+    if (/[\p{L}]{3}/u.test(value)) return matchLegalClass(value) || value
+  }
   const folded = fold(text)
   const labeled = folded.match(
     /classe(?:\s+processual)?(?:\s+da\s+acao)?\s*[:\-–—]?\s*([a-z0-9çãõáéíóúâêô ]{4,80})/
@@ -127,13 +135,13 @@ export function extractLegalClassFromText(text: string): string {
   }
 
   const window = folded.slice(0, 12_000)
-  let best: { value: string; index: number } | null = null
+  let best: { value: string; index: number; length: number } | null = null
   for (const item of LEGAL_CLASSES) {
     const aliases = [fold(item.label), ...(CLASS_ALIASES[item.value] ?? [])]
     for (const alias of aliases) {
       const index = window.indexOf(alias)
       if (index < 0) continue
-      if (!best || index < best.index) best = { value: item.value, index }
+      if (!best || index < best.index || (index === best.index && alias.length > best.length)) best = { value: item.value, index, length: alias.length }
     }
   }
   return best?.value ?? ''
@@ -152,7 +160,7 @@ export function matchLegalClass(text: string): string {
     const aliases = [fold(item.label), ...(CLASS_ALIASES[item.value] ?? [])]
     for (const alias of aliases) {
       if (!alias || alias.length < 4) continue
-      if (folded.includes(alias) || alias.includes(folded)) {
+      if (folded.includes(alias)) {
         if (!best || alias.length > best.length) best = { value: item.value, length: alias.length }
       }
     }
@@ -162,9 +170,19 @@ export function matchLegalClass(text: string): string {
 
 export function extractClientNameFromText(text: string): string {
   const normalized = text.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ')
-  const labelGroup = CLIENT_LABELS.join('|')
+  // Labels may follow another field on the same line, or precede a value
+  // on the next line. Explicit client labels take precedence over party roles.
+  for (const label of CLIENT_LABELS) {
+    const pattern = new RegExp(`(?:^|[\\s|;])${label}(?:\\s*\\([as]\\))?\\s*[:–—-]\\s*([^\\n|;]{3,160})`, 'gi')
+    for (const match of normalized.matchAll(pattern)) {
+      const candidate = match[1].split(/\s+(?:r[ée]u|r[ée]|requerid[oa]|advogad[oa]|autor[ae]?|classe|assunto|processo|CPF|CNPJ)\s*:/i)[0]
+      const name = cleanName(candidate)
+      if (name) return name
+    }
+  }
+  const labelGroup = [...CLIENT_LABELS].sort((a, b) => b.length - a.length).join('|')
   const labeled = new RegExp(
-    `(?:^|[\\n:;])\\s*(?:${labelGroup})\\s*[:\\-–—]?\\s*([^\\n]{5,140})`,
+    `(?:^|[\\n:;])\\s*(?:${labelGroup})\\b\\s*[:\\-–—]?\\s*([^\\n]{5,140})`,
     'i'
   )
   const labeledMatch = normalized.match(labeled)
@@ -187,11 +205,10 @@ export function extractClientNameFromText(text: string): string {
 }
 
 export function parsePdfCaseMetadata(text: string, fileName = ''): PdfCaseMetadata {
-  const haystack = `${fileName}\n${text}`
   return {
-    caseId: extractCnjFromText(haystack),
+    caseId: extractCnjFromText(text) || extractCnjFromText(fileName),
     clientName: extractClientNameFromText(text),
-    legalClass: extractLegalClassFromText(haystack),
+    legalClass: extractLegalClassFromText(text) || extractLegalClassFromText(fileName),
   }
 }
 
@@ -204,7 +221,7 @@ export function mergePdfCaseMetadata(
     if (!merged.caseId && source.caseId) merged.caseId = formatCnj(source.caseId) || source.caseId.trim()
     if (!merged.clientName && source.clientName) merged.clientName = source.clientName.trim()
     if (!merged.legalClass && source.legalClass) {
-      merged.legalClass = matchLegalClass(source.legalClass)
+      merged.legalClass = matchLegalClass(source.legalClass) || source.legalClass.trim()
     }
   }
   return merged

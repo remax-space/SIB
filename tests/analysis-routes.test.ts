@@ -4,12 +4,15 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { NextRequest, NextResponse } from 'next/server'
 import { loadRoute } from './route-harness'
 import { contextVersion } from '../lib/research/identity'
+import { createHash } from 'node:crypto'
+import { prepareSources } from '../lib/document-sources'
 
-async function harness(file: string, options: { foreign?: boolean; missing?: boolean; unauthenticated?: boolean; evidence?: boolean; failFirst?: boolean } = {}) {
+async function harness(file: string, options: { foreign?: boolean; missing?: boolean; unauthenticated?: boolean; evidence?: boolean; failFirst?: boolean; noText?: boolean; scanned?: boolean; unreadable?: boolean } = {}) {
   const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica)
-  pdf.addPage().drawText('PAGAMENTO NO ORIGINAL', { font })
+  const page = pdf.addPage()
+  if (!options.scanned) page.drawText('PAGAMENTO NO ORIGINAL', { font })
   const bytes = Buffer.from(await pdf.save())
-  const documents = [{ id: 'd1', caseId: options.foreign ? 'other' : 'case', filename: 'documento.pdf', extractedText: 'PAGAMENTO', textSource: 'FULL_TEXT' }]
+  const documents = [{ id: 'd1', caseId: options.foreign ? 'other' : 'case', filename: 'documento.pdf', extractedText: options.noText ? '' : 'PAGAMENTO', textSource: options.noText ? 'NO_TEXT' : 'FULL_TEXT' }]
   const state: Record<string, any> = { id: 'analysis', caseId: 'case', status: 'CONCLUIDO', provider: 'openai', modelUsed: 'gpt-4o', documentIds: ['d1'], missionLiteral: 'Apure pagamento', conversation: [], case: { cutoffDate: '2025-01-01' } }
   const calls: any[] = [], updates: any[] = []
   const receipts: any[] = []
@@ -25,8 +28,9 @@ async function harness(file: string, options: { foreign?: boolean; missing?: boo
       updateAnalysis: async (_id: string, data: any) => { updates.push(structuredClone(data)); Object.assign(state, structuredClone(data)); return state },
       getAnalysisById: async () => structuredClone(state), setSetting: async () => undefined, getSetting: async () => null,
     },
-    'lib/storage': { readStoredFile: async () => { downloads++; return bytes } },
+    'lib/storage': { readStoredFile: async () => { downloads++; if (options.unreadable) throw new Error('Original indisponível'); return bytes } },
     'lib/repo/research': {
+      listResearch: async () => [],
       ...Object.fromEntries(['createResearch', 'cachedResearch', 'claimResearch', 'finishResearch', 'readResearchResult', 'saveEvidence', 'markDispatched', 'saveResearchResult'].map(name => [name, async () => { throw new Error(`Pesquisa externa inesperada: ${name}`) }])),
       getEvidence: async () => options.evidence ? structuredClone(evidence) : null,
       getResearch: async () => ({ id: 'research', caseId: 'case', resultPath: 'snapshot', state: 'success', validUntil: Date.now() + 86400_000 }),
@@ -43,6 +47,29 @@ async function harness(file: string, options: { foreign?: boolean; missing?: boo
   return { ...loaded, state, calls, updates, receipts, evidence, downloads: () => downloads }
 }
 const request = (body: unknown) => new NextRequest('http://localhost/api/test', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } })
+
+test('upload calcula hash e tamanho dos bytes e mantém rejeição de original alterado', async () => {
+  const pdf = await PDFDocument.create(); pdf.addPage()
+  const bytes = Buffer.from(await pdf.save())
+  let saved: any
+  const loaded = await loadRoute('app/api/documents/complete/route.ts', {
+    'lib/auth-helpers': { requireAuth: async () => ({ user: { id: 'user' } }) },
+    'lib/rate-limit': { rateLimit: () => ({ ok: true }) },
+    'lib/storage': { readStoredFile: async () => bytes },
+    'lib/db': { createDocument: async (doc: any) => { saved = { ...doc, id: 'doc' }; return saved } },
+  })
+  try {
+    const response = await loaded.route.POST(request({ caseId: 'case', fileName: 'a.pdf', fileSize: 1, cloud_storage_path: 'uploads/a.pdf' }))
+    assert.equal(response.status, 201)
+    assert.equal(saved.sha256, createHash('sha256').update(bytes).digest('hex'))
+    assert.equal(saved.fileSize, bytes.length)
+    assert.ok((await prepareSources([saved], async () => bytes))[0].pdf)
+    const changed = Buffer.concat([bytes, Buffer.from('\n% changed')])
+    const [rejected] = await prepareSources([saved], async () => changed)
+    assert.equal(rejected.pdf, undefined)
+    assert.match(rejected.limitation!, /Hash do original diverge/)
+  } finally { loaded.dispose() }
+})
 
 test('rota inicial mantém SSE, ordem, persistência e fontes próprias dos dois revisores', async () => {
   const h = await harness('app/api/analysis/run/route.ts')
@@ -65,14 +92,38 @@ test('rota inicial mantém SSE, ordem, persistência e fontes próprias dos dois
   } finally { h.dispose() }
 })
 
-test('SOMENTE_BASILE mantém execução curta sem baixar anexos ou executar revisores', async () => {
-  const h = await harness('app/api/analysis/run/route.ts')
+test('SOMENTE_BASILE lê o original mesmo sem extração salva e não executa revisores', async () => {
+  const h = await harness('app/api/analysis/run/route.ts', { noText: true })
   try {
     const response = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'], runMode: 'SOMENTE_BASILE' }))
     assert.match(await response.text(), /completed/)
     assert.equal(h.calls.length, 1)
-    assert.equal(h.downloads(), 0)
+    assert.equal(h.downloads(), 1)
+    assert.match(h.calls[0].user, /PAGAMENTO NO ORIGINAL/)
+    assert.match(h.calls[0].user, /Página física 1/)
     assert.equal(h.state.status, 'CONCLUIDO')
+  } finally { h.dispose() }
+})
+
+test('Basile recebe PDF para leitura visual quando não há camada textual', async () => {
+  const h = await harness('app/api/analysis/run/route.ts', { noText: true, scanned: true })
+  try {
+    const response = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'], runMode: 'SOMENTE_BASILE' }))
+    assert.match(await response.text(), /completed/)
+    assert.equal(h.calls[0].documents[0].documentId, 'd1')
+    assert.deepEqual(h.calls[0].documents[0].pages, [1])
+    assert.ok(h.state.basileResult.cobertura_documental.paginas[0].processado)
+  } finally { h.dispose() }
+})
+
+test('original indisponível bloqueia a análise antes de enviar corpus vazio à IA', async () => {
+  const h = await harness('app/api/analysis/run/route.ts', { noText: true, unreadable: true })
+  try {
+    const response = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'] }))
+    assert.equal(response.status, 400)
+    assert.match((await response.json()).error, /Não foi possível ler/)
+    assert.equal(h.calls.length, 0)
+    assert.equal(h.updates.length, 0)
   } finally { h.dispose() }
 })
 

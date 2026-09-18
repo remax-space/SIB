@@ -98,8 +98,8 @@ export function DashboardClient() {
     found: { caseId?: string; clientName?: string; legalClass?: string },
     current: { caseId: string; clientName: string; legalClassTouched: boolean }
   ) => {
-    const nextCaseId = current.caseId.trim() || found.caseId?.trim() || ''
-    const nextClientName = current.clientName.trim() || found.clientName?.trim() || ''
+    const nextCaseId = found.caseId?.trim() || current.caseId.trim() || ''
+    const nextClientName = found.clientName?.trim() || current.clientName.trim() || ''
     const nextLegalClass = found.legalClass?.trim() || ''
 
     if (nextCaseId) setCaseId(nextCaseId)
@@ -270,7 +270,7 @@ export function DashboardClient() {
           caseId: caseId.trim(),
           title: caseId.trim(),
           clientName: clientName.trim(),
-          classText: classDef?.label ?? 'Ação de Conhecimento (genérica)',
+          classText: classDef?.label ?? legalClass,
           primaryRole: classDef?.role ?? 'ACAO_CONHECIMENTO',
           status: 'ATIVO',
         }),
@@ -512,6 +512,9 @@ export function DashboardClient() {
                 disabled={isRunning || readingPdf}
                 className="w-full h-10 rounded-md bg-input border border-border px-3 text-sm"
               >
+                {legalClass && !LEGAL_CLASSES.some((item) => item.value === legalClass) && (
+                  <option value={legalClass}>{legalClass}</option>
+                )}
                 {LEGAL_CLASSES.map((item) => (
                   <option key={item.value} value={item.value}>{item.label}</option>
                 ))}

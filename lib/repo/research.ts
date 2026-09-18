@@ -10,8 +10,16 @@ export async function getResearch(id: string): Promise<Research | null> {
   return doc.exists ? doc.data() as Research : null
 }
 export async function listResearch(analysisId: string): Promise<Research[]> {
-  const docs = await collection().where('analysisId', '==', analysisId).orderBy('createdAt', 'desc').limit(100).get()
-  return docs.docs.map(d => d.data() as Research)
+  try {
+    const docs = await collection().where('analysisId', '==', analysisId).orderBy('createdAt', 'desc').limit(100).get()
+    return docs.docs.map(d => d.data() as Research)
+  } catch (error) {
+    const failure = error as { code?: unknown; message?: unknown }
+    if (failure?.code === 9 && /requires an index/i.test(String(failure.message))) {
+      throw new ResearchError('RESEARCH_HISTORY_INDEX_PENDING', 503)
+    }
+    throw error
+  }
 }
 const lifecycle = (caseId: string) => getDb().collection('legalResearchLifecycle').doc(caseId)
 export async function createResearch(record: Research) {

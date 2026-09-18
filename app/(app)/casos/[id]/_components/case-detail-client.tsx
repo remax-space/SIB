@@ -64,7 +64,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
         }
 
         // Step 3: Register in DB
-        await fetch('/api/documents/complete', {
+        const completeRes = await fetch('/api/documents/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -76,6 +76,10 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
           }),
         })
 
+        if (!completeRes.ok) {
+          toast.error(`Erro ao registrar ${file.name}. O documento não está disponível para análise.`)
+          continue
+        }
         toast.success(`${file.name} enviado com sucesso`)
       }
       fetchCase()

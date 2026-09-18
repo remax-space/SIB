@@ -4,6 +4,8 @@ A causa era estrutural: o Mestre recebia somente interpretações anteriores; o 
 
 ## Implementação
 
+- Uploads calculam SHA-256 e tamanho a partir dos bytes armazenados. O cadastro antigo usava caminho + horário, causando falsa divergência de integridade. `npx tsx --require dotenv/config scripts/repair-document-hashes.ts <IDs>` verifica esse padrão; `--apply` corrige apenas correspondências comprovadas e preserva o valor anterior. A nova referência comprova o arquivo atual, não sua integridade retroativa.
+- A análise, inclusive SOMENTE_BASILE, abre os originais antes de executar agentes. Basile recebe a camada textual com páginas físicas sem depender da extração manual; documentos com páginas sem texto, recursos visuais ou corpus acima de 60 mil caracteres passam pela revisão documental em lotes. Originais indisponíveis bloqueiam o início; nenhuma página processada pelo Basile resulta em erro explícito. Resultados antigos não são recalculados automaticamente.
 - `lib/document-sources.ts`: valida seleção, abre originais via `readStoredFile`, confere SHA-256, conta páginas físicas e identifica recursos visuais. Os originais são baixados uma vez por execução e compartilhados pelos dois revisores.
 - `lib/llm-documents.ts` e `lib/llm.ts`: contrato comum de anexos. OpenAI usa Responses/input_file; Anthropic usa document/base64; Gemini usa inline_data/application/pdf. Cada anexo identifica documento, hash e páginas originais.
 - `lib/document-review.ts`: cada revisor percorre o acervo em lotes de até oito páginas antes de receber as interpretações anteriores. A síntese pode solicitar páginas complementares, com validação do identificador e da página. Modelos sem suporte PDF confirmado usam texto por página e OCR visual quando necessário/disponível.

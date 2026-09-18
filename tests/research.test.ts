@@ -11,8 +11,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { ResearchCitationAudit, citationAuditText } from '../components/research-citation-audit'
 import { hash } from '../lib/research/identity'
 import { MCP_CONTRACT, MCP_TOOLS } from '../lib/research/mcp'
+import { buildSearchContext } from '../lib/research/search-context'
 
 const input = { caseId: 'case', analysisId: 'analysis', provider: 'legacy', objective: 'Examinar fundamentos', query: 'prescrição intercorrente' }
+test('histórico identifica índice pendente sem mascarar outros erros do banco', async () => {
+  let failure = Object.assign(new Error('The query requires an index.'), { code: 9 })
+  const query: any = { where: () => query, orderBy: () => query, limit: () => query, get: async () => { throw failure } }
+  const loaded = await loadRoute('lib/repo/research.ts', { 'lib/firebase/admin': { getDb: () => ({ collection: () => query }), getBucket: () => null } })
+  try {
+    await assert.rejects(loaded.route.listResearch('analysis'), { code: 'RESEARCH_HISTORY_INDEX_PENDING', status: 503 })
+    failure = Object.assign(new Error('Permission denied'), { code: 7 })
+    await assert.rejects(loaded.route.listResearch('analysis'), error => error === failure)
+  } finally { loaded.dispose() }
+})
 function fakeStore() {
   const records = new Map<string, any>(), blobs = new Map<string, string>()
   let queue = Promise.resolve()
@@ -46,7 +57,7 @@ test('schemas: filtros reais, limites e ferramentas exigem parâmetros próprios
   assert.throws(() => planSchema.parse({ ...input, provider: 'legaw', tool: 'ler_inteiro_teor' }))
   assert.throws(() => planSchema.parse({ ...input, provider: 'legaw', tool: 'conferir_citacoes' }))
   assert.throws(() => planSchema.parse({ ...input, provider: 'legaw', tool: 'buscar_jurisprudencia', tribunal: 'STJ' }))
-  assert.throws(() => planSchema.parse({ ...input, provider: 'legaw', facts: 'x'.repeat(2000), thesis: 'y'.repeat(1000) }))
+  assert.doesNotThrow(() => planSchema.parse({ ...input, provider: 'legaw', facts: 'x'.repeat(2000), thesis: 'y'.repeat(1000) }))
   assert.equal(providerParameters(planSchema.parse({ ...input, provider: 'legaw', tool: 'ler_inteiro_teor', query: '', tribunal: 'STJ', processNumber: 'REsp 123456', page: 2 } as any)).numero_processo, 'REsp 123456')
   assert.equal(providerParameters(planSchema.parse({ ...input, provider: 'legaw', tool: 'conferir_citacoes', query: '', citationText: 'Citação revisada' } as any)).texto, 'Citação revisada')
   assert.throws(() => planSchema.parse({ ...input, provider: 'legaw', tool: 'buscar_legislacao', limit: 11 }))
@@ -55,6 +66,52 @@ test('schemas: filtros reais, limites e ferramentas exigem parâmetros próprios
   assert.equal(safeSourceUrl('javascript:alert(1)'), undefined)
   assert.equal(safeSourceUrl('https://127.0.0.1/x'), undefined)
   assert.equal(safeSourceUrl('https://stj.jus.br/decisao'), 'https://stj.jus.br/decisao')
+})
+
+test('contexto automático incorpora caso, missão, conversa e histórico sem exigir complementos', () => {
+  const plan = planSchema.parse({ caseId: 'case', analysisId: 'analysis' })
+  const query = buildSearchContext(plan, {
+    missionLiteral: 'Missão padrão. COMPLEMENTO DO OPERADOR: Excluir Lucas da cobrança de honorários',
+    basileResult: { linha_estado_processual: 'Cumprimento de sentença', tese_principal: 'Responsabilidade pela condenação' },
+    conversation: [{ message: 'Verificar ilegitimidade', content: 'Conferir o título executivo' }],
+    orientacoesResult: { recomendacao_final: 'Conferir quem foi condenado' },
+  }, { caseId: '5483012', classText: 'Cumprimento de Sentença' }, [{ extractedText: 'Sentença de honorários determina obrigação para a parte condenada.' }], [
+    { state: 'success', plan: { query: 'Limites da condenação em honorários' } } as Research,
+  ])
+  for (const value of ['5483012', 'Excluir Lucas', 'Cumprimento de sentença', 'ilegitimidade', 'Limites da condenação', 'Sentença de honorários', 'não é prova']) assert.ok(query.includes(value), value)
+  assert.ok(query.length <= 2000)
+  const large = buildSearchContext({ ...plan, query: 'pergunta '.repeat(250), facts: 'fatos '.repeat(300) }, { missionLiteral: 'missão '.repeat(2000) }, {}, [{ extractedText: 'documento '.repeat(5000) }], [])
+  assert.ok(large.length <= 2000)
+  assert.ok(large.includes('Complementos do usuário'))
+})
+
+test('preparação congela contexto enviado e alteração na conversa exige nova revisão', async () => {
+  const h = await harness()
+  try {
+    h.analysis.missionLiteral = 'Excluir Lucas do cumprimento de sentença de honorários'
+    const prepared = await h.route.prepareResearch({ ...input, query: '', facts: '', thesis: '' }, 'user')
+    assert.match(prepared.research.parameters.query, /Excluir Lucas/)
+    assert.equal(h.calls.length, 0)
+    Object.assign(h.analysis, { conversation: [{ message: 'Novo fato relevante', content: 'Conferir' }] })
+    await assert.rejects(h.route.confirmResearch(prepared.research.id, prepared.approvalToken, 'user'), /CONNECTION_CHANGED_RECONFIRM/)
+    assert.equal(h.calls.length, 0)
+  } finally { h.dispose() }
+})
+
+test('busca prioriza esclarecimento sobre antigo advogado sem confundir cliente com devedor', () => {
+  const query = buildSearchContext(planSchema.parse({ caseId: 'case', analysisId: 'analysis' }), {
+    missionLiteral: 'Excluir Lucas do cumprimento de sentença de honorários',
+    conversation: [
+      { message: 'A cooperativa é executada. O antigo advogado cobra honorários sucumbenciais conforme evento 44.' },
+      { message: 'VC TAMBEM NAO TEM ACESSO AO PDF?', content: 'Eu não tenho capacidade de acessar documentos.' },
+    ],
+  }, { classText: 'Cumprimento de sentença' }, [{ filename: 'autos.pdf', extractedText: '[Página 1]\nArquivo 1: honorarios.pdf\n\n[Página 44]\nO antigo advogado requer o cumprimento de sentença de honorários sucumbenciais contra a cooperativa executada.' }], [{ state: 'success', plan: { query: 'caso atual' } } as Research])
+  assert.match(query, /titularidade do crédito/)
+  assert.match(query, /autonomia em relação ao cliente/)
+  assert.match(query, /evento 44/)
+  assert.match(query, /p\. 44/)
+  assert.doesNotMatch(query, /ACESSO AO PDF|capacidade de acessar|caso atual|Arquivo 1/)
+  assert.ok(query.length <= 2000)
 })
 test('preparação não consulta, token não é salvo em claro e confirmação não aceita outro usuário', async () => {
   const h = await harness()

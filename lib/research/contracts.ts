@@ -1,13 +1,13 @@
 import { z } from 'zod'
 
-export const CONTRACT_VERSION = 'legaw-remote-mcp/sdk-1.30.0/docs-2026-09-18/sib-4'
+export const CONTRACT_VERSION = 'legaw-remote-mcp/sdk-1.30.0/docs-2026-09-18/sib-6-focused-context'
 export const idSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().startsWith(v), 'Data inválida')
 export const planSchema = z.object({
   caseId: idSchema, analysisId: idSchema,
   provider: z.enum(['legaw', 'legacy']).default('legaw'),
   tool: z.enum(['buscar_jurisprudencia', 'buscar_legislacao', 'ler_inteiro_teor', 'conferir_citacoes']).default('buscar_jurisprudencia'),
-  objective: z.string().trim().min(5).max(1000),
+  objective: z.string().trim().max(1000).default(''),
   query: z.string().trim().max(2000).default(''),
   facts: z.string().trim().max(2000).default(''),
   thesis: z.string().trim().max(1000).default(''),
@@ -26,9 +26,6 @@ export const planSchema = z.object({
   allowAfterCutoff: z.boolean().default(false),
   refresh: z.boolean().default(false),
 }).strict().superRefine((p, ctx) => {
-  if (['buscar_jurisprudencia', 'buscar_legislacao'].includes(p.tool) && p.query.length < 5) ctx.addIssue({ code: 'custom', path: ['query'], message: 'Informe uma pergunta jurídica com pelo menos 5 caracteres' })
-  const consultaLength = [p.query, p.facts && `Fatos necessários: ${p.facts}`, p.thesis && `Questão: ${p.thesis}`].filter(Boolean).join('\n').length
-  if (['buscar_jurisprudencia', 'buscar_legislacao'].includes(p.tool) && consultaLength > 2000) ctx.addIssue({ code: 'custom', path: ['query'], message: 'A consulta enviada ao Legaw não pode exceder 2.000 caracteres' })
   if (p.startDate && p.endDate && p.startDate > p.endDate) ctx.addIssue({ code: 'custom', message: 'Período invertido' })
   const toolSpecific = p.tribunal || p.processNumber || p.judgmentDate || p.relator || p.citationText || p.page !== 1
   if (p.tool === 'buscar_jurisprudencia' && toolSpecific) ctx.addIssue({ code: 'custom', message: 'Busca de jurisprudência usa somente os filtros publicados; parâmetros de inteiro teor/conferência não são aceitos' })
@@ -55,7 +52,7 @@ export type Evidence = { id: string; caseId: string; analysisId: string; created
 export const selectionSchema = z.object({ caseId: idSchema, analysisId: idSchema, selections: z.array(z.object({ researchId: idSchema, sourceIds: z.array(z.string().max(180)).min(1).max(20) }).strict()).min(1).max(10), allowAfterCutoff: z.boolean(), acknowledgeStale: z.boolean() }).strict()
 
 export function providerParameters(p: Plan): Record<string, unknown> {
-  // Only explicitly reviewed fields leave SIB. Local stance, terms and exclusions stay local.
+  // The service supplies the server-built context as query before persisting the reviewed parameters.
   const consulta = [p.query, p.facts && `Fatos necessários: ${p.facts}`, p.thesis && `Questão: ${p.thesis}`].filter(Boolean).join('\n')
   if (p.provider === 'legacy') return { query: consulta, q: consulta, termo: consulta, size: 10 }
   if (p.tool === 'buscar_legislacao') return { consulta, limite: p.limit }

@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:documents": "tsx --test tests/document-review.test.ts tests/analysis-routes.test.ts tests/extraction-storage.test.ts",
+    "test:documents": "tsx --test tests/document-review.test.ts tests/analysis-routes.test.ts tests/extraction-storage.test.ts tests/pdf-metadata.test.ts",
     "seed": "tsx --require dotenv/config scripts/safe-seed.ts",
     "ensure-master": "tsx --require dotenv/config scripts/ensure-master.ts",
     "migrate:firestore": "tsx --require dotenv/config scripts/migrate-sqlite-to-firestore.ts",

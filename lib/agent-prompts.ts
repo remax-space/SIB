@@ -11,21 +11,21 @@ REGRAS INVIOLÁVEIS:
 5. A missão do operador é soberana.
 
 Responda EXCLUSIVAMENTE em JSON válido.`,
-    user: `MISSÃO LITERAL DO OPERADOR:\n"${mission}"\n\nCORPUS DOCUMENTAL:\n${corpusText?.substring(0, 60000) ?? ''}\n\nProduza um JSON com a seguinte estrutura:\n{\n  "linha_estado_processual": "<estado atual do processo>",\n  "cronologia": [{"data": "", "evento": "", "fonte": ""}],\n  "fatos_provas": [{"item": "", "categoria": "<escala epistêmica>", "evidencia": "", "fonte": "", "icp_parcial": 0, "classificacao_epistemica": ""}],\n  "contradicoes": [{"descricao": "", "fonte_a": "", "fonte_b": "", "impacto": ""}],\n  "lacunas_probatorias": [{"fato": "", "grau_atual": "", "prova_ausente": "", "probabilidade": "", "risco": ""}],\n  "tese_principal": "",\n  "observacoes": "<melhor conduta objetiva do operador>"\n}\n\nNÃO inclua a missão, o prompt, instruções internas nem campos de metadados. Responda apenas com o resultado da análise, em JSON puro, sem markdown.`
+    user: `MISSÃO LITERAL DO OPERADOR:\n"${mission}"\n\nCORPUS DOCUMENTAL:\n${corpusText ?? ''}\n\nProduza um JSON com a seguinte estrutura:\n{\n  "linha_estado_processual": "<estado atual do processo>",\n  "cronologia": [{"data": "", "evento": "", "fonte": ""}],\n  "fatos_provas": [{"item": "", "categoria": "<escala epistêmica>", "evidencia": "", "fonte": "", "icp_parcial": 0, "classificacao_epistemica": ""}],\n  "contradicoes": [{"descricao": "", "fonte_a": "", "fonte_b": "", "impacto": ""}],\n  "lacunas_probatorias": [{"fato": "", "grau_atual": "", "prova_ausente": "", "probabilidade": "", "risco": ""}],\n  "tese_principal": "",\n  "observacoes": "<melhor conduta objetiva do operador>"\n}\n\nNÃO inclua a missão, o prompt, instruções internas nem campos de metadados. Responda apenas com o resultado da análise, em JSON puro, sem markdown.`
   };
 }
 
 export function getAdvogadoPrompt(basileOutput: string, corpusText: string): { system: string; user: string } {
   return {
     system: `Você é o ADVOGADO DO DIABO do SIB. Seu papel é encontrar TODAS as fraquezas, contra-argumentos e riscos da posição analisada pelo agente BASILE. Seja impiedoso mas fundamentado.\n\nResponda EXCLUSIVAMENTE em JSON válido.`,
-    user: `RESULTADO DO BASILE:\n${basileOutput?.substring(0, 40000) ?? ''}\n\nCORPUS:\n${corpusText?.substring(0, 20000) ?? ''}\n\nProduza JSON:\n{\n  "contra_argumentos": [{"tese_atacada": "", "argumento": "", "fonte": "", "gravidade": "ALTA|MEDIA|BAIXA"}],\n  "tese_contraparte": "",\n  "pontos_frageis": [{"ponto": "", "risco": "", "mitigacao": ""}],\n  "riscos_identificados": [""]\n}\n\nNÃO inclua missão, prompt nem instruções. JSON puro com o resultado, sem markdown.`
+    user: `RESULTADO DO BASILE:\n${basileOutput?.substring(0, 40000) ?? ''}\n\nCORPUS:\n${corpusText ?? ''}\n\nProduza JSON:\n{\n  "contra_argumentos": [{"tese_atacada": "", "argumento": "", "fonte": "", "gravidade": "ALTA|MEDIA|BAIXA"}],\n  "tese_contraparte": "",\n  "pontos_frageis": [{"ponto": "", "risco": "", "mitigacao": ""}],\n  "riscos_identificados": [""]\n}\n\nNÃO inclua missão, prompt nem instruções. JSON puro com o resultado, sem markdown.`
   };
 }
 
 export function getCabecaPrompt(basileOutput: string, advocadoOutput: string, corpusText: string): { system: string; user: string } {
   return {
     system: `Você é a CABEÇA DO JUIZ no SIB. Analise como um magistrado pensaria ao julgar este caso. Avalie probabilidade de acolhimento, riscos judiciais e precedentes.\n\nResponda EXCLUSIVAMENTE em JSON válido.`,
-    user: `BASILE:\n${basileOutput?.substring(0, 30000) ?? ''}\n\nADVOGADO DO DIABO:\n${advocadoOutput?.substring(0, 20000) ?? ''}\n\nCORPUS:\n${corpusText?.substring(0, 15000) ?? ''}\n\nJSON:\n{\n  "probabilidade_acolhimento": "<ALTA|MEDIA|BAIXA|INCERTA>",\n  "fundamento_decisao_provavel": "",\n  "precedentes_relevantes": [""],\n  "riscos_judiciais": [{"risco": "", "probabilidade": "", "impacto": ""}],\n  "recomendacao_judicial": ""\n}\n\nNÃO inclua missão, prompt nem instruções. JSON puro com o resultado, sem markdown.`
+    user: `BASILE:\n${basileOutput?.substring(0, 30000) ?? ''}\n\nADVOGADO DO DIABO:\n${advocadoOutput?.substring(0, 20000) ?? ''}\n\nCORPUS:\n${corpusText ?? ''}\n\nJSON:\n{\n  "probabilidade_acolhimento": "<ALTA|MEDIA|BAIXA|INCERTA>",\n  "fundamento_decisao_provavel": "",\n  "precedentes_relevantes": [""],\n  "riscos_judiciais": [{"risco": "", "probabilidade": "", "impacto": ""}],\n  "recomendacao_judicial": ""\n}\n\nNÃO inclua missão, prompt nem instruções. JSON puro com o resultado, sem markdown.`
   };
 }
 

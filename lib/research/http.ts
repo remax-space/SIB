@@ -16,6 +16,7 @@ export async function researchBody(request: Request) {
   try { return JSON.parse(text) as unknown } catch { throw new ResearchError('INVALID_JSON', 400) }
 }
 const messages: Record<string, string> = {
+  RESEARCH_HISTORY_INDEX_PENDING: 'O histórico está aguardando a preparação do banco de dados. Tente carregá-lo novamente em alguns minutos; se persistir, avise o administrador. Nenhuma pesquisa externa foi iniciada por esta leitura.',
   LEGAW_MCP_KEY_MISSING: 'Configure a chave de integração Legaw no servidor (LEGAW_MCP_KEY).',
   LEGAW_SHARED_USE_REQUIRED: 'Confirme que sua conta Legaw permite o uso compartilhado e a conservação das fontes no SIB.',
   LEGAW_MCP_TOOLS_MISSING: 'O MCP não disponibilizou as quatro ferramentas esperadas. A conexão não foi ativada.',
@@ -28,7 +29,7 @@ const messages: Record<string, string> = {
   INVALID_APPROVAL: 'Confirmação inválida ou vinculada a outro usuário. Prepare novamente.',
   APPROVAL_EXPIRED: 'A revisão expirou. Prepare e confirme novamente.',
   CONTEXT_CHANGED: 'Os documentos, a missão ou o corte temporal mudaram. Revise novamente o plano.',
-  CONNECTION_CHANGED_RECONFIRM: 'A configuração mudou. Prepare e confirme novamente.',
+  CONNECTION_CHANGED_RECONFIRM: 'A configuração ou o contexto da análise mudou. Prepare e confirme novamente.',
   LOCAL_BUDGET_EXHAUSTED: 'Limite local de chamadas ou concorrência atingido.',
   RESEARCH_IN_PROGRESS: 'Uma pesquisa idêntica já está em andamento. Consulte o histórico.',
   REMOTE_EXECUTION_UNCERTAIN: 'Execução remota incerta. Não haverá repetição automática; verifique com o provedor.',

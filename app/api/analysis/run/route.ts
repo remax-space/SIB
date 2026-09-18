@@ -95,7 +95,9 @@ export async function POST(request: NextRequest) {
       if (!origin || origin.missionLiteral !== missionLiteral || JSON.stringify(origin.documentIds) !== JSON.stringify(documentIds)) throw new ResearchError('CONTEXT_CHANGED');
     }
     const deadline = Date.now() + 270_000;
-    const sources = mode === 'SOMENTE_BASILE' ? [] : await prepareSources(documents, readStoredFile);
+    const sources = await prepareSources(documents, readStoredFile);
+    const unavailable = sources.find(source => !source.pdf || !source.pageCount);
+    if (unavailable) throw new DocumentSelectionError(`Não foi possível ler ${unavailable.filename}: ${unavailable.limitation ?? 'PDF sem páginas'}. Corrija o documento antes de iniciar a análise.`);
     const sourceManifest = JSON.stringify(sources.map(({ id, filename, sha256, pageCount, limitation }) => ({ id, filename, sha256, pageCount, limitation })));
     const timedLLM: typeof callLLM = (options) => {
       const remaining = deadline - Date.now() - 5000;
@@ -104,9 +106,13 @@ export async function POST(request: NextRequest) {
       return callLLM({ ...options, ...prompt, timeoutMs: Math.min(60_000, remaining) });
     };
 
-    const corpusText = (documents ?? [])
-      .map((d: any) => `--- DOCUMENTO: ${d?.filename ?? 'sem nome'} ---\n[Origem textual: ${d.textSource}; extração: ${d.extractionStatus}; armazenamento: ${d.storageStatus}]\n${d?.extractedText ?? '(sem texto extraído)'}\n`)
-      .join('\n');
+    // Read the originals even when the operator has not clicked "Extrair texto".
+    // Never substitute a stored preview or an empty extraction for the PDF.
+    const originalCorpus = sources.map(source => `--- DOCUMENTO: ${source.filename} (${source.id}) ---\n` +
+      Array.from({ length: source.pageCount! }, (_, index) => `[Página física ${index + 1}]\n${source.pages[index]?.trim() || '[Sem camada textual: requer leitura visual]'}`).join('\n\n')).join('\n\n');
+    const needsDocumentReview = originalCorpus.length > 60_000 || sources.some(source =>
+      source.visualPages?.length || Array.from({ length: source.pageCount! }, (_, i) => source.pages[i]).some(text => !text?.trim()));
+    let corpusText = originalCorpus;
 
     // Create analysis record
     const jobId = generateJobId();
@@ -141,9 +147,17 @@ export async function POST(request: NextRequest) {
           await evidenceReceipt(evidence, analysis.id, 'basile', analysis.id);
 
           const cutoffDate = typeof caseData.cutoffDate === 'string' ? caseData.cutoffDate : undefined;
-          const basilePrompt = getBasilePrompt(missionLiteral, corpusText, cutoffDate);
-          const basileRaw = await timedLLM({ provider: providerKey, system: basilePrompt.system, user: basilePrompt.user, model, json: true, label: 'BASILE' });
-          const basileResult = parseJSON(basileRaw);
+          const basilePrompt = getBasilePrompt(missionLiteral, needsDocumentReview ? sourceManifest : corpusText, cutoffDate);
+          const basileResult = needsDocumentReview
+            ? await reviewDocuments({ sources, provider: providerKey, model, agent: 'BASILE', mission: missionLiteral, cutoffDate,
+                prompt: withEvidence(basilePrompt, evidence), deadline: mode === 'SOMENTE_BASILE' ? deadline : Date.now() + Math.max(0, (deadline - Date.now()) / 3),
+                onProgress: async result => { await updateAnalysis(analysis.id, { basileResult: result }); } })
+            : parseJSON(await timedLLM({ provider: providerKey, system: basilePrompt.system, user: basilePrompt.user, model, json: true, label: 'BASILE' }));
+          if (needsDocumentReview && !(basileResult.cobertura_documental as { paginas?: { processado: boolean }[] })?.paginas?.some(page => page.processado)) {
+            throw new Error('Nenhuma página do PDF pôde ser processada. Consulte as limitações documentais e verifique o provedor de IA.');
+          }
+          const basileRaw = JSON.stringify(basileResult);
+          if (needsDocumentReview) corpusText = `AVALIAÇÃO DOCUMENTAL DO BASILE (interpretação, não transcrição integral do PDF):\n${JSON.stringify(comparisonResult(basileResult))}`;
           if (evidence) basileResult.fontes_juridicas = auditResearchCitations(basileRaw, evidence);
           await updateAnalysis(analysis.id, { basileResult });
           sendEvent({ status: 'agent_complete', agent: 'basile', label: 'OPERADOR — Investigador' });

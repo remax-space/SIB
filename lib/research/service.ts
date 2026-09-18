@@ -8,6 +8,12 @@ import { contextVersion, fingerprint, hash } from './identity'
 import { ResearchError, type ResearchAdapter } from './adapter'
 import { legawMcpAdapter } from './mcp'
 import { mcpConnectionState, mcpConnectionVersion } from './connection'
+import { buildSearchContext } from './search-context'
+
+function searchContextVersion(ctx: Awaited<ReturnType<typeof researchContext>>) {
+  return hash([ctx.version, ctx.caseData.caseId, ctx.caseData.classText, ctx.caseData.objective,
+    ctx.analysis.conversation, ctx.analysis.basileResult, ctx.analysis.mestreResult, ctx.analysis.orientacoesResult])
+}
 
 export async function researchContext(analysisId: string, caseId?: string) {
   const analysis = await getAnalysisById(analysisId) as Record<string, unknown> | null
@@ -17,7 +23,7 @@ export async function researchContext(analysisId: string, caseId?: string) {
   if (!caseData) throw new ResearchError('CASE_NOT_FOUND', 404)
   const docs = await getDocumentsWithText(Array.isArray(analysis.documentIds) ? analysis.documentIds as string[] : [])
   validateDocumentSelection(String(analysis.caseId), analysis.documentIds, docs)
-  return { analysis, caseData, version: contextVersion(analysis, caseData, docs) }
+  return { analysis, caseData, docs, version: contextVersion(analysis, caseData, docs) }
 }
 async function connection(provider: Plan['provider']) {
   if (provider === 'legaw') return { enabled: (await mcpConnectionState()).active, version: mcpConnectionVersion(), adapter: legawMcpAdapter }
@@ -44,11 +50,14 @@ export async function prepareResearch(input: unknown, userId: string) {
   if (ctx.analysis.status !== 'CONCLUIDO') throw new ResearchError('ANALYSIS_NOT_COMPLETE')
   const cutoff = typeof ctx.caseData.cutoffDate === 'string' ? ctx.caseData.cutoffDate.slice(0, 10) : null
   if (cutoff && plan.tool === 'buscar_jurisprudencia' && plan.provider === 'legaw' && !plan.allowAfterCutoff && (!plan.endDate || plan.endDate > cutoff)) throw new ResearchError('DEFINE_PERIOD_WITHIN_CUTOFF', 422)
-  const cfg = await connection(plan.provider), fp = fingerprint(plan, cfg.version, ctx.version), token = randomBytes(32).toString('hex'), now = Date.now()
-  const record: Research = { id: randomUUID(), caseId: plan.caseId, analysisId: plan.analysisId, userId, plan, version: CONTRACT_VERSION, contextVersion: ctx.version, fingerprint: fp, approvalHash: hash(token), parameters: providerParameters(plan), createdAt: now, expiresAt: now + 15 * 60_000, state: 'awaiting_confirmation', idempotencyKey: randomUUID() }
+  const query = ['buscar_jurisprudencia', 'buscar_legislacao'].includes(plan.tool)
+    ? buildSearchContext(plan, ctx.analysis, ctx.caseData, ctx.docs, await repo.listResearch(plan.analysisId)) : null
+  const parameters = providerParameters(query ? { ...plan, query, facts: '', thesis: '' } : plan)
+  const cfg = await connection(plan.provider), fp = fingerprint(plan, cfg.version, searchContextVersion(ctx), parameters), token = randomBytes(32).toString('hex'), now = Date.now()
+  const record: Research = { id: randomUUID(), caseId: plan.caseId, analysisId: plan.analysisId, userId, plan, version: CONTRACT_VERSION, contextVersion: ctx.version, fingerprint: fp, approvalHash: hash(token), parameters, createdAt: now, expiresAt: now + 15 * 60_000, state: 'awaiting_confirmation', idempotencyKey: randomUUID() }
   await repo.createResearch(record)
   const cached = await repo.cachedResearch(fp)
-  return { research: publicResearch(record), approvalToken: token, available: cfg.enabled, reusable: cached?.resultPath ? { id: cached.id, validUntil: cached.validUntil, stale: (cached.validUntil ?? 0) < now } : null, maxCalls: 1, blockers: plan.provider === 'legaw' ? (await mcpConnectionState()).blockers : [], warnings: ['Análise concluída não comprova leitura integral dos documentos.', 'Similaridade não mede chance de êxito; ausência de resultados não prova ausência de precedentes.', 'Consumo Legaw desconhecido até retorno do provedor. Interpretação por IA é uma operação separada.'] }
+  return { research: publicResearch(record), approvalToken: token, available: cfg.enabled, reusable: cached?.resultPath ? { id: cached.id, validUntil: cached.validUntil, stale: (cached.validUntil ?? 0) < now } : null, maxCalls: 1, blockers: plan.provider === 'legaw' ? (await mcpConnectionState()).blockers : [], warnings: [...(query ? ['Contexto do processo incluído automaticamente e condensado em até 2.000 caracteres. Revise os dados enviados; o PDF integral não é transmitido nesta busca.'] : []), ...(query && ctx.docs.some(d => !String(d.extractedText ?? '').trim()) ? ['Há documento sem texto extraído disponível. A pesquisa usa o restante do contexto, sem comprovar os fatos do PDF.'] : []), 'Análise concluída não comprova leitura integral dos documentos.', 'Similaridade não mede chance de êxito; ausência de resultados não prova ausência de precedentes.', 'Consumo Legaw desconhecido até retorno do provedor. Interpretação por IA é uma operação separada.'] }
 }
 export function publicResearch(record: Research) {
   const { approvalHash, budgetKeys, ...safe } = record
@@ -107,7 +116,7 @@ export async function confirmResearch(id: string, token: string, userId: string,
   if (record.userId !== userId || record.approvalHash !== hash(token)) throw new ResearchError('INVALID_APPROVAL', 403)
   const ctx = await researchContext(record.analysisId, record.caseId), cfg = await connection(record.plan.provider)
   if (record.contextVersion !== ctx.version) throw new ResearchError('CONTEXT_CHANGED')
-  if (fingerprint(record.plan, cfg.version, ctx.version) !== record.fingerprint) throw new ResearchError('CONNECTION_CHANGED_RECONFIRM')
+  if (fingerprint(record.plan, cfg.version, searchContextVersion(ctx), record.parameters) !== record.fingerprint) throw new ResearchError('CONNECTION_CHANGED_RECONFIRM')
   const cached = await repo.cachedResearch(record.fingerprint)
   const canReuse = !record.plan.refresh && !!cached?.resultPath && (cached.validUntil ?? 0) > Date.now()
   if (record.state === 'awaiting_confirmation' && !cfg.enabled && !canReuse) throw new ResearchError(record.plan.provider === 'legaw' ? 'LEGAW_CONTRACT_PENDING' : 'INTEGRATION_DISABLED', 503)

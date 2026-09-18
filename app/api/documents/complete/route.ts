@@ -5,6 +5,7 @@ import { createDocument } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
+import { readStoredFile } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -14,20 +15,21 @@ export async function POST(request: NextRequest) {
   }
   try {
     const body = await request.json();
-    const { caseId, fileName, contentType, fileSize, cloud_storage_path } = body ?? {};
+    const { caseId, fileName, contentType, cloud_storage_path } = body ?? {};
 
     if (!caseId || !fileName || !cloud_storage_path) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
     }
 
-    const sha256 = crypto.createHash('sha256').update(`${cloud_storage_path}-${Date.now()}`).digest('hex');
+    const bytes = await readStoredFile(cloud_storage_path, contentType ?? 'application/pdf', false);
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
 
     const doc = await createDocument({
       caseId,
       filename: fileName,
       cloudStoragePath: cloud_storage_path,
       isPublic: false,
-      fileSize: fileSize ?? 0,
+      fileSize: bytes.length,
       mimeType: contentType ?? 'application/pdf',
       sha256,
       readStatus: 'PENDENTE',

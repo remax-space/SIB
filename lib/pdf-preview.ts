@@ -7,38 +7,18 @@ import {
   type PdfCaseMetadata,
 } from '@/lib/pdf-case-metadata'
 
-const MAX_PAGES = 4
 const MIN_TEXT_CHARS = 80
-
-function extractRawPdfStrings(buffer: Buffer): string {
-  const sample = buffer.subarray(0, Math.min(buffer.length, 2_500_000)).toString('latin1')
-  const chunks: string[] = []
-
-  for (const match of sample.matchAll(/\((?:\\.|[^\\)]){4,180}\)/g)) {
-    const inner = (match[0] ?? '')
-      .slice(1, -1)
-      .replace(/\\n/g, '\n')
-      .replace(/\\r/g, '\n')
-      .replace(/\\t/g, ' ')
-      .replace(/\\([()\\])/g, '$1')
-    if (/[A-Za-zÀ-ÿ0-9]/.test(inner)) chunks.push(inner)
-  }
-
-  return chunks.join('\n')
-}
 
 async function extractLocalPdfText(buffer: Buffer): Promise<string> {
   try {
-    const { extractText, getDocumentProxy } = await import('unpdf')
-    const pdf = await getDocumentProxy(new Uint8Array(buffer))
-    const { text } = await extractText(pdf, { mergePages: false })
+    const { extractText } = await import('unpdf')
+    const { text } = await extractText(new Uint8Array(buffer), { mergePages: false })
     const pages = Array.isArray(text) ? text : [text]
-    const sliced = pages.slice(0, MAX_PAGES).join('\n')
-    if (sliced.replace(/\s+/g, '').length >= 20) return sliced
+    return pages.map((page, index) => `[Página ${index + 1}]\n${page}`).join('\n\n')
   } catch (error) {
     console.warn('unpdf extract failed:', error)
   }
-  return extractRawPdfStrings(buffer)
+  return ''
 }
 
 function metadataFromLlm(data: {
@@ -87,6 +67,18 @@ export async function previewPdfCaseMetadata(opts: {
   let metadata = parsePdfCaseMetadata(localText, opts.fileName)
   let source = localText.replace(/\s+/g, '').length >= 20 ? 'pdf' : 'filename'
 
+  // Read the original even when a text layer exists: mixed/scanned pages and
+  // column order can make apparently complete local matches incorrect.
+  try {
+    const visual = metadataFromLlm(await extractPdfCaseMetadata({
+      base64: opts.buffer.toString('base64'), filename: opts.fileName,
+    }))
+    metadata = mergePdfCaseMetadata(visual, metadata)
+    source = 'pdf+ia'
+  } catch (error) {
+    console.warn('LLM pdf metadata failed:', error)
+  }
+
   if (missingPdfCaseMetadataFields(metadata).length > 0 && localText.trim().length >= MIN_TEXT_CHARS) {
     try {
       metadata = mergePdfCaseMetadata(metadata, metadataFromLlm(await inferCaseMetadataFromText(localText)))
@@ -96,24 +88,7 @@ export async function previewPdfCaseMetadata(opts: {
     }
   }
 
-  if (missingPdfCaseMetadataFields(metadata).length > 0 && localText.trim().length < MIN_TEXT_CHARS) {
-    try {
-      metadata = mergePdfCaseMetadata(
-        metadata,
-        metadataFromLlm(
-          await extractPdfCaseMetadata({
-            base64: opts.buffer.toString('base64'),
-            filename: opts.fileName,
-          })
-        )
-      )
-      source = 'ia'
-    } catch (error) {
-      console.warn('LLM pdf metadata failed:', error)
-    }
-  }
-
-  if (metadata.caseId) {
+  if (metadata.caseId && missingPdfCaseMetadataFields(metadata).length > 0) {
     metadata = mergePdfCaseMetadata(metadata, await enrichFromDatajud(metadata.caseId))
   }
 
