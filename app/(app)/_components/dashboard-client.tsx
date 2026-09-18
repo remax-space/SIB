@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { FadeIn } from '@/components/ui/animate'
-import { Upload, X, Play, Loader2 } from 'lucide-react'
+import { Upload, X, Play, Loader2, Copy, Check, Maximize2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AGENTS, LEGAL_CLASSES } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
@@ -181,7 +181,10 @@ export function DashboardClient() {
       await navigator.clipboard.writeText(content)
       setCopiedAgent(agent)
       setTimeout(() => setCopiedAgent(null), 2000)
-    } catch { /* ignore */ }
+      toast.success('Copiado com sucesso!')
+    } catch {
+      toast.error('Não foi possível copiar.')
+    }
   }
 
   const handleExecutarRodada = async () => {
@@ -349,6 +352,11 @@ export function DashboardClient() {
     }
   }
 
+  const triad = AGENTS.filter((agent) => ['basile', 'advocado', 'cabeca'].includes(agent.key))
+  const auditor = AGENTS.find((agent) => agent.key === 'auditor')
+  const mestre = AGENTS.find((agent) => agent.key === 'mestre')
+  const orientador = AGENTS.find((agent) => agent.key === 'orientacoes')
+
   return (
     <div className="space-y-6">
       <FadeIn>
@@ -496,15 +504,124 @@ export function DashboardClient() {
         </CardContent>
       </Card>
 
-      {Object.values(agents).some(a => a.status !== 'waiting') && <section aria-label="Resultados disponíveis" className="space-y-4">
-        <h2 className="font-semibold">Resultados disponíveis</h2>
-        <p role="status" className="text-sm text-muted-foreground">{isRunning ? 'Análise em andamento. As conclusões aparecem conforme ficam disponíveis.' : analysisCompleted ? 'Análise finalizada. Confira as ressalvas e as fontes.' : 'A análise foi interrompida. Consulte os resultados disponíveis antes de tentar novamente.'}</p>
-        {['mestre', 'orientacoes', 'basile', 'advocado', 'cabeca', 'auditor'].filter(key => agents[key]?.status !== 'waiting').map(key => <details key={key} open={key === 'mestre'} className="rounded-lg border p-4"><summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2">{({ mestre: 'MESTRE — Síntese Estratégica', orientacoes: 'ORIENTADOR — Revisor Independente', basile: 'OPERADOR — Investigador', advocado: 'ADVOGADO DO DIABO — Contraditório', cabeca: 'CABEÇA DO JUIZ — Perspectiva Judicial', auditor: 'AUDITOR DOCUMENTAL — Integridade' } as Record<string, string>)[key]} — {getAgentStatusLabel(agents[key].status)}</summary><div className="pt-4"><AgentBody agent={agents[key]} /><div className="mt-3"><ExpandedView title={AGENTS.find(agent => agent.key === key)?.label ?? 'Resultado'}><AgentBody agent={agents[key]} expanded /></ExpandedView></div><Button variant="outline" className="mt-3" onClick={() => handleCopy(key, agents[key].content)} disabled={!agents[key].content}>{copiedAgent === key ? 'Copiado' : 'Copiar com fontes e ressalvas'}</Button></div></details>)}
-      </section>}
+      {Object.values(agents).some((a) => a.status !== 'waiting') && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {isRunning
+            ? 'Análise em andamento. As conclusões aparecem conforme ficam disponíveis.'
+            : analysisCompleted
+              ? 'Análise finalizada. Confira as ressalvas e as fontes.'
+              : 'A análise foi interrompida. Consulte os resultados disponíveis antes de tentar novamente.'}
+        </p>
+      )}
+
+      <div>
+        <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+          6. RESULTADOS DA RODADA — TRÍADE INDEPENDENTE
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {triad.map((agent) => (
+            <AgentCard
+              key={agent.key}
+              title={agent.label}
+              subtitle={agent.subtitle}
+              agent={agents[agent.key]}
+              onCopy={() => handleCopy(agent.key, agents[agent.key]?.content ?? '')}
+              copied={copiedAgent === agent.key}
+            />
+          ))}
+        </div>
+      </div>
+
+      {auditor && (
+        <div>
+          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+            6B. AUDITOR DOCUMENTAL — INTEGRIDADE E ICP
+          </h2>
+          <AgentCard
+            title={auditor.label}
+            subtitle={auditor.subtitle}
+            agent={agents[auditor.key]}
+            onCopy={() => handleCopy(auditor.key, agents[auditor.key]?.content ?? '')}
+            copied={copiedAgent === auditor.key}
+          />
+        </div>
+      )}
+
+      {mestre && (
+        <div>
+          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+            7. CONCLUSÃO DO MESTRE — SÍNTESE ESTRATÉGICA
+          </h2>
+          <Card className="border-primary/30">
+            <div className="bg-primary/20 px-4 py-2.5 flex items-center justify-between gap-2 border-b border-primary/20">
+              <div>
+                <h3 className="text-sm font-bold text-primary">MESTRE — SÍNTESE ESTRATÉGICA</h3>
+                <p className="text-xs text-muted-foreground">Auditoria posterior e síntese unificada</p>
+              </div>
+              {agents[mestre.key]?.content ? (
+                <ExpandedView
+                  title="MESTRE — SÍNTESE ESTRATÉGICA"
+                  label="Tela maior"
+                  description="Visualização ampliada da síntese do Mestre."
+                >
+                  <AgentBody agent={agents[mestre.key]} expanded />
+                </ExpandedView>
+              ) : (
+                <Button variant="outline" size="sm" disabled className="text-xs opacity-60">
+                  <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                  Tela maior
+                </Button>
+              )}
+            </div>
+            <CardContent className="p-4">
+              <AgentBody agent={agents[mestre.key]} />
+              <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-border/20">
+                {agents[mestre.key]?.content ? (
+                  <ExpandedView
+                    title="MESTRE — SÍNTESE ESTRATÉGICA"
+                    label="Ver em tela maior"
+                    description="Visualização ampliada da síntese do Mestre."
+                  >
+                    <AgentBody agent={agents[mestre.key]} expanded />
+                  </ExpandedView>
+                ) : (
+                  <Button variant="outline" size="sm" disabled className="text-xs opacity-60">
+                    <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                    Ver em tela maior
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopy('mestre', agents[mestre.key]?.content ?? '')}
+                  disabled={!agents[mestre.key]?.content}
+                  className="text-xs"
+                >
+                  {copiedAgent === 'mestre' ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
+                  {copiedAgent === 'mestre' ? 'Copiado' : 'COPIAR'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {orientador && (
+        <div>
+          <h2 className="text-sm font-bold text-foreground mb-3 tracking-wide">
+            8. ORIENTADOR — REVISOR INDEPENDENTE
+          </h2>
+          <AgentCard
+            title={orientador.label}
+            subtitle={orientador.subtitle}
+            agent={agents[orientador.key]}
+            onCopy={() => handleCopy(orientador.key, agents[orientador.key]?.content ?? '')}
+            copied={copiedAgent === orientador.key}
+          />
+        </div>
+      )}
 
       {analysisCompleted && analysisId && <ConversationTable key={analysisId} analysisId={analysisId} />}
-
-
     </div>
   )
 }
@@ -535,9 +652,82 @@ function AgentBody({ agent, expanded = false }: { agent?: AgentResult; expanded?
         {current.status === 'running' && <Loader2 className="w-3 h-3 inline mr-1 animate-spin" />}
         {getAgentStatusLabel(current.status)}
       </p>
-      <div className={`text-sm bg-input border border-border rounded-md min-h-[150px] p-3 whitespace-pre-wrap leading-relaxed ${expanded ? '' : 'max-h-[320px] overflow-y-auto'}`}>
+      <div
+        className={`text-sm bg-input border border-border rounded-md min-h-[150px] p-3 whitespace-pre-wrap leading-relaxed ${
+          expanded ? 'min-h-[400px]' : 'max-h-[320px] overflow-y-auto'
+        }`}
+      >
         {current.content || <span className="text-muted-foreground"> </span>}
       </div>
     </>
+  )
+}
+
+function AgentCard({
+  title,
+  subtitle,
+  agent,
+  onCopy,
+  copied,
+}: {
+  title: string
+  subtitle?: string
+  agent?: AgentResult
+  onCopy: () => void
+  copied: boolean
+}) {
+  const displayTitle = subtitle ? `${title} — ${subtitle}` : title
+  return (
+    <Card className="border-border/50 flex flex-col h-full">
+      <div className="bg-surface-2 px-4 py-2.5 flex items-center justify-between gap-2 border-b border-border/40">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-bold text-foreground truncate" title={title}>{title}</h3>
+          {subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
+        </div>
+        {agent?.content ? (
+          <ExpandedView
+            title={displayTitle}
+            label="Tela maior"
+            description={`Visualização completa e ampliada de ${displayTitle}.`}
+          >
+            <AgentBody agent={agent} expanded />
+          </ExpandedView>
+        ) : (
+          <Button variant="outline" size="sm" disabled className="text-xs opacity-60">
+            <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+            Tela maior
+          </Button>
+        )}
+      </div>
+      <CardContent className="p-4 flex-1 flex flex-col justify-between">
+        <AgentBody agent={agent} />
+        <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-border/20">
+          {agent?.content ? (
+            <ExpandedView
+              title={displayTitle}
+              label="Ver em tela maior"
+              description={`Visualização completa e ampliada de ${displayTitle}.`}
+            >
+              <AgentBody agent={agent} expanded />
+            </ExpandedView>
+          ) : (
+            <Button variant="outline" size="sm" disabled className="text-xs opacity-60">
+              <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+              Ver em tela maior
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCopy}
+            disabled={!agent?.content}
+            className="text-xs"
+          >
+            {copied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
+            {copied ? 'Copiado' : 'COPIAR'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
