@@ -1,10 +1,10 @@
-import { Timestamp } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { getDb } from '@/lib/firebase/admin'
 import { serializeDoc } from '@/lib/firebase/serialize'
-import { incrementCaseCount } from './counters'
 import { UniqueConstraintError } from './errors'
 import { createId } from './ids'
 import { deleteAnalysisBlobs, readLargeJson, storeLargeJson } from './text-store'
+import { assertCaseWritableInTransaction } from './research'
 
 const COLLECTION = 'analyses'
 
@@ -53,16 +53,14 @@ function toAnalysis(id: string, data: Record<string, unknown>): Record<string, u
   }
 }
 
-export async function listAnalysesByCase(caseId: string) {
+export async function listAnalysesByCase(caseId: string, withResults = true) {
   const snap = await getDb()
     .collection(COLLECTION)
     .where('caseId', '==', caseId)
     .orderBy('createdAt', 'desc')
     .get()
 
-  return Promise.all(
-    snap.docs.map(async (doc) => toAnalysis(doc.id, await hydrateResults(doc.data())))
-  )
+  return Promise.all(snap.docs.map(async (doc) => toAnalysis(doc.id, withResults ? await hydrateResults(doc.data()) : doc.data())))
 }
 
 export async function getAnalysisById(id: string, includeCase = false) {
@@ -119,6 +117,10 @@ export async function createAnalysis(input: {
   const now = Timestamp.now()
 
   await db.runTransaction(async (tx) => {
+    const caseRef = db.collection('cases').doc(input.caseId)
+    const caseSnap = await tx.get(caseRef)
+    if (!caseSnap.exists) throw new Error('Caso não encontrado')
+    await assertCaseWritableInTransaction(tx, input.caseId)
     const existing = await tx.get(db.collection(COLLECTION).where('jobId', '==', input.jobId).limit(1))
     if (!existing.empty) throw new UniqueConstraintError('Já existe uma análise com este jobId')
     tx.set(ref, {
@@ -146,15 +148,15 @@ export async function createAnalysis(input: {
       createdAt: now,
       completedAt: input.completedAt ? Timestamp.fromDate(input.completedAt) : null,
     })
+    tx.update(caseRef, { analysisCount: FieldValue.increment(1), updatedAt: now })
   })
-
-  await incrementCaseCount(input.caseId, 'analysisCount', 1)
   const created = await ref.get()
   return toAnalysis(created.id, created.data() ?? {})
 }
 
 export async function updateAnalysis(id: string, input: Record<string, unknown>) {
-  const ref = getDb().collection(COLLECTION).doc(id)
+  const db = getDb()
+  const ref = db.collection(COLLECTION).doc(id)
   const snap = await ref.get()
   if (!snap.exists) return null
 
@@ -173,20 +175,39 @@ export async function updateAnalysis(id: string, input: Record<string, unknown>)
     data[field] = input[field]
   }
 
-  if (Object.keys(data).length) await ref.update(data)
+  if (Object.keys(data).length) {
+    await db.runTransaction(async tx => {
+      const current = await tx.get(ref)
+      if (!current.exists) return
+      const caseId = current.data()?.caseId
+      if (typeof caseId === 'string') await assertCaseWritableInTransaction(tx, caseId)
+      tx.update(ref, data as any)
+    })
+  }
   return getAnalysisById(id)
 }
 
-export async function deleteAnalysisRecord(id: string, bumpCounter = true) {
+export async function deleteAnalysisRecord(id: string, bumpCounter = true, options: { allowCaseDeleting?: boolean } = {}) {
   const snap = await getDb().collection(COLLECTION).doc(id).get()
-  if (!snap.exists) return { ok: true }
+  if (!snap.exists) return { ok: true, status: 'already_absent' as const }
   const caseId = snap.data()?.caseId
-  await deleteAnalysisBlobs(id)
-  await snap.ref.delete()
-  if (bumpCounter && typeof caseId === 'string') {
-    await incrementCaseCount(caseId, 'analysisCount', -1)
+  if (typeof caseId === 'string' && !options.allowCaseDeleting) {
+    await getDb().runTransaction(async tx => { await assertCaseWritableInTransaction(tx, caseId) })
   }
-  return { ok: true }
+  const hasStoredResults = Object.values(snap.data() ?? {}).some(value => Boolean(value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { _storagePath?: unknown })._storagePath === 'string'))
+  const hasStoredConversation = Array.isArray(snap.data()?.conversation) && snap.data()!.conversation.some((turn: any) => turn?.documentaryResult && typeof turn.documentaryResult === 'object' && typeof turn.documentaryResult._storagePath === 'string')
+  if (hasStoredResults || hasStoredConversation) await deleteAnalysisBlobs(id)
+  await getDb().runTransaction(async tx => {
+    const current = await tx.get(snap.ref)
+    if (!current.exists) return
+    const currentCaseId = current.data()?.caseId
+    const caseRef = typeof currentCaseId === 'string' ? getDb().collection('cases').doc(currentCaseId) : null
+    const caseSnap = caseRef ? await tx.get(caseRef) : null
+    if (typeof currentCaseId === 'string' && !options.allowCaseDeleting) await assertCaseWritableInTransaction(tx, currentCaseId)
+    tx.delete(snap.ref)
+    if (bumpCounter && caseRef && caseSnap?.exists) tx.update(caseRef, { analysisCount: FieldValue.increment(-1), updatedAt: Timestamp.now() })
+  })
+  return { ok: true, status: 'deleted' as const }
 }
 
 export async function upsertAnalysisByJobId(input: Parameters<typeof createAnalysis>[0]) {

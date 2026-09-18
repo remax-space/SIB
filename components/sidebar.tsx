@@ -21,7 +21,6 @@ const navSections = [
   {
     items: [
       { href: '/casos', label: 'Processos' },
-      { href: '/caixas', label: 'Caixas Processuais' },
       { href: '/triagem', label: 'Triagem Documental' },
     ],
   },

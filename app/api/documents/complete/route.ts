@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { createDocument } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
+import { ResearchError } from '@/lib/research/adapter';
+import { researchHttpError } from '@/lib/research/http';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import { readStoredFile } from '@/lib/storage';
@@ -37,6 +39,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(doc, { status: 201 });
   } catch (error: any) {
+    if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Document complete error:', error);
     return NextResponse.json({ error: 'Erro ao registrar documento' }, { status: 500 });
   }

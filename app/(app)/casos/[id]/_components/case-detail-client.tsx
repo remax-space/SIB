@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layouts/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FadeIn } from '@/components/ui/animate'
 import { ArrowLeft, Upload, FileText, Brain, Trash2, Eye, RefreshCw, Plus } from 'lucide-react'
@@ -13,13 +13,16 @@ import { CASE_STATUSES, READ_STATUSES, ANALYSIS_STATUSES, getIcpClass } from '@/
 import { toast } from 'sonner'
 import { putUploadedFile } from '@/lib/upload-file'
 import { StatusExplanation } from '@/components/status-explanation'
+import { DeleteCaseDialog } from '@/components/case-delete-dialog'
 
 export function CaseDetailClient({ caseId }: { caseId: string }) {
+  const router = useRouter()
   const [caseData, setCaseData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [extracting, setExtracting] = useState<string | null>(null)
   const [viewDoc, setViewDoc] = useState<any>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const fetchCase = useCallback(() => {
     fetch(`/api/cases/${caseId}`)
@@ -124,6 +127,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
 
   if (loading) return <p className="text-muted-foreground">Carregando caso...</p>
   if (!caseData || caseData?.error) return <p className="text-destructive">Caso não encontrado.</p>
+  if (caseData?.deletionStatus === 'EM_ANDAMENTO') return <div className="space-y-6"><PageHeader title={caseData?.title ?? 'Processo'} description={`${caseData?.caseId ?? ''} • ${caseData?.clientName ?? ''}`} actions={<Link href="/casos"><Button variant="ghost" size="sm"><ArrowLeft className="mr-1 h-4 w-4" />Voltar aos processos</Button></Link>} /><Card><CardContent className="py-12 text-center"><Trash2 className="mx-auto mb-3 h-10 w-10 text-destructive" /><p className="font-medium">Este processo está em exclusão.</p><p className="mt-1 text-sm text-muted-foreground">As operações ficam bloqueadas enquanto os dados vinculados são limpos. Atualize a página para acompanhar o resultado.</p></CardContent></Card></div>
 
   const statusDef = CASE_STATUSES?.find((s: any) => s?.value === caseData?.status)
 
@@ -141,6 +145,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
               <span className={`text-xs px-3 py-1.5 rounded-full ${statusDef?.color ?? ''} flex items-center`}>
                 {statusDef?.label ?? caseData?.status}
               </span>
+              <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} disabled={Boolean(caseData?.deletionStatus)}><Trash2 className="mr-1 h-4 w-4" />Excluir processo</Button>
             </div>
           }
         />
@@ -346,6 +351,14 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
           </div>
         </TabsContent>
       </Tabs>
+      <DeleteCaseDialog
+        processes={[caseData]}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onResult={result => {
+          if (result.completedIds.includes(caseId)) router.push('/casos')
+        }}
+      />
     </div>
   )
 }

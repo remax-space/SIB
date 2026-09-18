@@ -9,6 +9,8 @@ import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm';
 import { prepareSources, sourceAttachment } from '@/lib/document-sources';
 import { supportsPdf } from '@/lib/llm-documents';
 import { rateLimit } from '@/lib/rate-limit';
+import { ResearchError } from '@/lib/research/adapter';
+import { researchHttpError } from '@/lib/research/http';
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -51,6 +53,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const saved = await setDocumentExtractedText(id, extractedText, source.pageCount, 'LIDO_PARCIALMENTE', { pageCount: source.pageCount, textPages, emptyPages, status: textPages.length ? 'PARTIAL' : 'NO_TEXT', method: usedOcr ? 'OCR' : 'TEXT_LAYER' });
     return NextResponse.json({ success: true, pageCount: source.pageCount, textLength: saved?.textLength ?? 0, readStatus: saved?.readStatus, emptyPages, limitations });
   } catch (error: any) {
+    if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Extract error:', error);
     return NextResponse.json({ error: 'Erro ao extrair texto do documento' }, { status: 500 });
   }

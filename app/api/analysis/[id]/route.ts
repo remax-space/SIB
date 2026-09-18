@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { deleteAnalysisRecord, getAnalysisById } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
 import { getEvidenceUses } from '@/lib/repo/research';
+import { ResearchError } from '@/lib/research/adapter';
+import { researchHttpError } from '@/lib/research/http';
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -12,6 +14,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     await deleteAnalysisRecord(id);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
+    if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Analysis DELETE error:', error);
     return NextResponse.json({ error: 'Erro ao limpar análise' }, { status: 500 });
   }

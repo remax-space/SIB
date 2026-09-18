@@ -3,6 +3,9 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { getCaseById } from '@/lib/db';
 import { requireAuth } from '@/lib/auth-helpers';
+import { assertCaseWritable } from '@/lib/repo/research';
+import { ResearchError } from '@/lib/research/adapter';
+import { researchHttpError } from '@/lib/research/http';
 import { generateUploadTarget } from '@/lib/storage';
 import { rateLimit } from '@/lib/rate-limit';
 
@@ -24,11 +27,13 @@ export async function POST(request: NextRequest) {
     if (!caseExists) {
       return NextResponse.json({ error: 'Caso não encontrado' }, { status: 404 });
     }
+    await assertCaseWritable(caseId);
 
     const { uploadUrl, cloud_storage_path } = await generateUploadTarget(fileName, contentType);
 
     return NextResponse.json({ uploadUrl, cloud_storage_path, fileName });
   } catch (error: any) {
+    if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Upload presign error:', error);
     return NextResponse.json({ error: 'Erro ao gerar URL de upload' }, { status: 500 });
   }

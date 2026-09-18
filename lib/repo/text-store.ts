@@ -32,14 +32,11 @@ export async function readExtractedText(documentId: string, storedPath?: string)
   }
 }
 
-export async function deleteExtractedText(documentId: string) {
-  try {
-    await getBucket().file(extractedTextPath(documentId)).delete({ ignoreNotFound: true })
-    const [versions] = await getBucket().getFiles({ prefix: `extracted/${documentId}/` })
-    await Promise.all(versions.map(file => file.delete({ ignoreNotFound: true })))
-  } catch {
-    /* ignore */
-  }
+export async function deleteExtractedText(documentId: string, storedPath?: string) {
+  const paths = new Set([extractedTextPath(documentId), ...(storedPath ? [storedPath] : [])])
+  await Promise.all([...paths].map(path => getBucket().file(path).delete({ ignoreNotFound: true })))
+  const [versions] = await getBucket().getFiles({ prefix: `extracted/${documentId}/` })
+  await Promise.all(versions.map(file => file.delete({ ignoreNotFound: true })))
 }
 
 export async function storeLargeJson(analysisId: string, field: string, value: unknown, forceStorage = false) {
@@ -68,10 +65,6 @@ export async function readLargeJson(value: unknown) {
 }
 
 export async function deleteAnalysisBlobs(analysisId: string) {
-  try {
-    const [files] = await getBucket().getFiles({ prefix: `analyses/${analysisId}/` })
-    await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })))
-  } catch {
-    /* Storage pode ainda não estar habilitado */
-  }
+  const [files] = await getBucket().getFiles({ prefix: `analyses/${analysisId}/` })
+  await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })))
 }

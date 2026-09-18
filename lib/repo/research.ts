@@ -5,6 +5,56 @@ import { ResearchError } from '@/lib/research/adapter'
 import type { Evidence, Research, Result } from '@/lib/research/contracts'
 
 const collection = () => getDb().collection('legalResearch')
+const lifecycle = (caseId: string) => getDb().collection('legalResearchLifecycle').doc(caseId)
+
+/**
+ * The research lifecycle document is also the process tombstone. Keeping one
+ * marker for all process writes prevents uploads, analyses and conversations
+ * from racing a destructive cleanup.
+ */
+export async function assertCaseWritableInTransaction(tx: any, caseId: string) {
+  const state = await tx.get(lifecycle(caseId))
+  if (state.data()?.deleting) throw new ResearchError('CASE_DELETION_IN_PROGRESS')
+  return state
+}
+
+export async function assertCaseWritable(caseId: string) {
+  return getDb().runTransaction(async tx => assertCaseWritableInTransaction(tx, caseId))
+}
+
+export async function markCaseDeletionFailed(caseId: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  await getDb().runTransaction(async tx => {
+    const ref = lifecycle(caseId)
+    const current = await tx.get(ref)
+    const caseRef = getDb().collection('cases').doc(caseId)
+    const caseSnap = await tx.get(caseRef)
+    tx.set(ref, {
+      ...(current.data() ?? {}),
+      deleting: true,
+      status: 'FALHA_LIMPEZA',
+      error: message.slice(0, 500),
+      failedAt: Date.now(),
+      leaseUntil: 0,
+    })
+    if (caseSnap.exists) tx.update(caseRef, { deletionStatus: 'FALHA_LIMPEZA', deletionError: message.slice(0, 500) })
+  })
+}
+
+export async function markCaseDeletionCompleted(caseId: string) {
+  await getDb().runTransaction(async tx => {
+    const ref = lifecycle(caseId)
+    const current = await tx.get(ref)
+    tx.set(ref, {
+      ...(current.data() ?? {}),
+      deleting: true,
+      status: 'CONCLUIDA',
+      completedAt: Date.now(),
+      leaseUntil: 0,
+    })
+  })
+}
+
 export async function getResearch(id: string): Promise<Research | null> {
   const doc = await collection().doc(id).get()
   return doc.exists ? doc.data() as Research : null
@@ -21,7 +71,6 @@ export async function listResearch(analysisId: string): Promise<Research[]> {
     throw error
   }
 }
-const lifecycle = (caseId: string) => getDb().collection('legalResearchLifecycle').doc(caseId)
 export async function createResearch(record: Research) {
   await getDb().runTransaction(async tx => {
     const state = await tx.get(lifecycle(record.caseId))
@@ -172,7 +221,16 @@ export async function deleteCaseResearch(caseId: string) {
     const state = await tx.get(lifecycle(caseId))
     const current = await tx.get(collection().where('caseId', '==', caseId))
     if (current.docs.some(d => d.data().state === 'running')) throw new ResearchError('RESEARCH_IN_PROGRESS')
-    tx.set(lifecycle(caseId), { deleting: true, startedAt: state.data()?.startedAt ?? Date.now() })
+    const stateData = state.data() ?? {}
+    const now = Date.now()
+    tx.set(lifecycle(caseId), {
+      ...stateData,
+      deleting: true,
+      status: 'EM_ANDAMENTO',
+      startedAt: stateData.startedAt ?? now,
+      leaseUntil: now + 5 * 60_000,
+      error: null,
+    })
   })
   // Tombstone remains after deletion, including failed/retried cleanup. New writes read it transactionally.
   const docs = await collection().where('caseId', '==', caseId).get()

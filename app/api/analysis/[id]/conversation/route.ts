@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireAuth } from '@/lib/auth-helpers'
 import { getAnalysisById, getDocumentsWithText } from '@/lib/db'
 import { getDb } from '@/lib/firebase/admin'
+import { assertCaseWritable, assertCaseWritableInTransaction } from '@/lib/repo/research'
 import { callLLM, firstConfiguredProvider, getProviderModel } from '@/lib/llm'
 import { prepareSources, validateDocumentSelection, DocumentSelectionError } from '@/lib/document-sources'
 import { reviewDocuments } from '@/lib/document-review'
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params
     const analysis = await getAnalysisById(id, true) as Record<string, unknown> | null
     if (!analysis) return NextResponse.json({ error: 'Análise não encontrada.' }, { status: 404 })
+    await assertCaseWritable(String(analysis.caseId))
     if (analysis.status !== 'CONCLUIDO') return NextResponse.json({ error: 'A mesa estará disponível após a conclusão da análise.' }, { status: 409 })
     const { agent, message, revision } = parsed.data
     const history = Array.isArray(analysis.conversation) ? analysis.conversation : []
@@ -66,6 +68,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const saved = await getDb().runTransaction(async tx => {
         const ref = getDb().collection('analyses').doc(id)
         const current = await tx.get(ref)
+        await assertCaseWritableInTransaction(tx, String(analysis.caseId))
         const turns = current.data()?.conversation ?? []
         if (!current.exists || current.data()?.status !== 'CONCLUIDO' || (reserved ? turns[revision]?.id !== turnId : turns.length !== revision)) return false
         const next = reserved ? turns.map((turn: { id: string }) => turn.id === turnId ? storedTurn : turn) : [...turns, storedTurn]
@@ -87,6 +90,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const saved = await getDb().runTransaction(async (tx) => {
       const ref = getDb().collection('analyses').doc(id)
       const current = await tx.get(ref)
+      await assertCaseWritableInTransaction(tx, String(analysis.caseId))
       if (!current.exists || current.data()?.status !== 'CONCLUIDO' || (current.data()?.conversation?.length ?? 0) !== revision) return false
       tx.update(ref, { conversation })
       return true

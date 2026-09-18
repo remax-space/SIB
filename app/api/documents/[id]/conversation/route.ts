@@ -5,6 +5,8 @@ import { readStoredFile } from '@/lib/storage'
 import { locateMovement } from '@/lib/document-movements'
 import { rateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
+import { ResearchError } from '@/lib/research/adapter'
+import { researchHttpError } from '@/lib/research/http'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       sources, readStatus, pageCount: pages.length,
     })
   } catch (error) {
+    if (error instanceof ResearchError) return researchHttpError(error)
     console.error('Document conversation:', error)
     return NextResponse.json({ error: 'Não foi possível ler o PDF. Verifique o arquivo e tente novamente.' }, { status: 500 })
   }

@@ -39,6 +39,7 @@ export async function PATCH(_request: NextRequest, { params }: { params: Promise
     if (!updated) return NextResponse.json({ error: 'Caso não encontrado' }, { status: 404 });
     return NextResponse.json(updated);
   } catch (error: any) {
+    if (error instanceof ResearchError) return researchHttpError(error);
     console.error('Case PATCH error:', error);
     return NextResponse.json({ error: 'Erro ao atualizar caso' }, { status: 500 });
   }
@@ -48,10 +49,13 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
   try {
     const { id } = await params;
-    await deleteCase(id);
-    return NextResponse.json({ success: true });
+    const result = await deleteCase(id);
+    return NextResponse.json(result);
   } catch (error: any) {
     if (error instanceof ResearchError) return researchHttpError(error);
+    if (error?.code === 'CASE_CLEANUP_INCOMPLETE') {
+      return NextResponse.json({ error: error.message, code: error.code, retryable: true }, { status: 502 });
+    }
     console.error('Case DELETE error:', error);
     return NextResponse.json({ error: 'Erro ao excluir caso' }, { status: 500 });
   }

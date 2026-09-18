@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { getBucket } from '@/lib/firebase/admin'
 import { textAvailability, shouldPreserveExtraction, type ExtractionInfo } from '@/lib/extraction-integrity'
 import { Timestamp } from 'firebase-admin/firestore'
+import { FieldValue } from 'firebase-admin/firestore'
 import { getDb } from '@/lib/firebase/admin'
 import { serializeDoc } from '@/lib/firebase/serialize'
-import { incrementCaseCount } from './counters'
 import { createId } from './ids'
 import {
   deleteExtractedText,
@@ -12,6 +12,7 @@ import {
   readExtractedText,
 } from './text-store'
 import { deleteStoredFile } from '@/lib/storage'
+import { assertCaseWritableInTransaction } from './research'
 
 const COLLECTION = 'documents'
 
@@ -95,21 +96,27 @@ export async function createDocument(input: {
   const id = createId()
   const ref = getDb().collection(COLLECTION).doc(id)
   const now = Timestamp.now()
-  await ref.set({
-    caseId: input.caseId,
-    filename: input.filename,
-    cloudStoragePath: input.cloudStoragePath,
-    isPublic: input.isPublic ?? false,
-    fileSize: input.fileSize ?? 0,
-    mimeType: input.mimeType ?? 'application/pdf',
-    sha256: input.sha256,
-    readStatus: input.readStatus ?? 'PENDENTE',
-    extractedTextPreview: null,
-    textLength: 0,
-    pageCount: null,
-    uploadedAt: now,
+  await getDb().runTransaction(async tx => {
+    const caseRef = getDb().collection('cases').doc(input.caseId)
+    const caseSnap = await tx.get(caseRef)
+    if (!caseSnap.exists) throw new Error('Caso não encontrado')
+    await assertCaseWritableInTransaction(tx, input.caseId)
+    tx.set(ref, {
+      caseId: input.caseId,
+      filename: input.filename,
+      cloudStoragePath: input.cloudStoragePath,
+      isPublic: input.isPublic ?? false,
+      fileSize: input.fileSize ?? 0,
+      mimeType: input.mimeType ?? 'application/pdf',
+      sha256: input.sha256,
+      readStatus: input.readStatus ?? 'PENDENTE',
+      extractedTextPreview: null,
+      textLength: 0,
+      pageCount: null,
+      uploadedAt: now,
+    })
+    tx.update(caseRef, { documentCount: FieldValue.increment(1), updatedAt: now })
   })
-  await incrementCaseCount(input.caseId, 'documentCount', 1)
   const created = await ref.get()
   return toDocument(created.id, created.data() ?? {})
 }
@@ -129,7 +136,15 @@ export async function updateDocument(id: string, input: Record<string, unknown>)
     delete data.pageCount
   }
 
-  if (Object.keys(data).length) await ref.update(data)
+  if (Object.keys(data).length) {
+    await getDb().runTransaction(async tx => {
+      const current = await tx.get(ref)
+      if (!current.exists) return
+      const caseId = current.data()?.caseId
+      if (typeof caseId === 'string') await assertCaseWritableInTransaction(tx, caseId)
+      tx.update(ref, data as any)
+    })
+  }
   return getDocumentById(id, true)
 }
 
@@ -153,6 +168,8 @@ export async function setDocumentExtractedText(id: string, extractedText: string
   // Immutable text blob first, then atomic metadata pointer; concurrent retries cannot overwrite it.
   await getDb().runTransaction(async tx => {
     const current = await tx.get(ref)
+    const caseId = current.data()?.caseId
+    if (typeof caseId === 'string') await assertCaseWritableInTransaction(tx, caseId)
     if (current.updateTime?.isEqual(before.updateTime!)) {
       tx.update(ref, {
         extractedTextPath: path, extractedTextPreview: previewText(extractedText), textLength: extractedText.length,
@@ -165,21 +182,28 @@ export async function setDocumentExtractedText(id: string, extractedText: string
   return getDocumentById(id, true)
 }
 
-export async function deleteDocumentRecord(id: string) {
+export async function deleteDocumentRecord(id: string, options: { allowCaseDeleting?: boolean } = {}) {
   const snap = await getDb().collection(COLLECTION).doc(id).get()
-  if (!snap.exists) return { success: true }
+  if (!snap.exists) return { success: true, status: 'already_absent' as const }
   const data = snap.data() ?? {}
+  const caseId = typeof data.caseId === 'string' ? data.caseId : null
+  if (caseId && !options.allowCaseDeleting) {
+    await getDb().runTransaction(async tx => { await assertCaseWritableInTransaction(tx, caseId) })
+  }
   if (typeof data.cloudStoragePath === 'string') {
-    try {
-      await deleteStoredFile(data.cloudStoragePath)
-    } catch (err) {
-      console.error('Storage delete error:', err)
-    }
+    await deleteStoredFile(data.cloudStoragePath)
   }
-  await deleteExtractedText(id)
-  await snap.ref.delete()
-  if (typeof data.caseId === 'string') {
-    await incrementCaseCount(data.caseId, 'documentCount', -1)
-  }
-  return { success: true }
+  const hasExtractedText = typeof data.extractedTextPath === 'string' || Number(data.textLength ?? 0) > 0 || Boolean(data.extractedTextPreview)
+  if (hasExtractedText) await deleteExtractedText(id, typeof data.extractedTextPath === 'string' ? data.extractedTextPath : undefined)
+  await getDb().runTransaction(async tx => {
+    const current = await tx.get(snap.ref)
+    if (!current.exists) return
+    const currentCaseId = current.data()?.caseId
+    const caseRef = typeof currentCaseId === 'string' ? getDb().collection('cases').doc(currentCaseId) : null
+    const caseSnap = caseRef ? await tx.get(caseRef) : null
+    if (typeof currentCaseId === 'string' && !options.allowCaseDeleting) await assertCaseWritableInTransaction(tx, currentCaseId)
+    tx.delete(snap.ref)
+    if (caseRef && caseSnap?.exists) tx.update(caseRef, { documentCount: FieldValue.increment(-1), updatedAt: Timestamp.now() })
+  })
+  return { success: true, status: 'deleted' as const }
 }
