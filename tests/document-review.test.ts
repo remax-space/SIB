@@ -9,6 +9,50 @@ import { getMestrePrompt, getOrientacoesPrompt } from '../lib/agent-prompts'
 import { textAvailability, shouldPreserveExtraction } from '../lib/extraction-integrity'
 import { formatAgentOutput } from '../lib/format-agent-output'
 
+test('retomada preserva páginas, rejeita mudança do original e consolida todos os lotes extensos', async () => {
+  const { sources } = await fixture(65)
+  const received: number[] = [], reduced: number[] = []
+  let result: Record<string, any> | undefined
+  const llm: typeof callLLM = async opts => {
+    if (opts.documents) {
+      const pages = opts.documents[0].pages
+      received.push(...pages)
+      return JSON.stringify({ paginas: pages, avaliacao_documental_propria: 'x'.repeat(12000), evidencias: [] })
+    }
+    if (opts.system.includes('Consolide estas avaliações')) {
+      const groups = JSON.parse(opts.user).avaliacoes
+      reduced.push(...groups.flatMap((n: any) => n.paginas))
+      return JSON.stringify({ avaliacao_documental_propria: 'Consolidado com referências', paginas: groups.flatMap((n: any) => n.paginas), evidencias: [] })
+    }
+    assert.equal(received.length, 65, 'não sintetizar com páginas pendentes')
+    return JSON.stringify({ sintese_executiva: 'Fim da simulação' })
+  }
+  const opts = { sources: [sources[0]], agent: 'BASILE', provider: 'openai', model: 'gpt-4o', mission: 'leitura', prompt: { system: 'Analise', user: 'Missão' }, resumable: true, maxBatches: 2, llm }
+  for (let step = 0; step < 6; step++) {
+    result = await reviewDocuments({ ...opts, deadline: Date.now() + 60_000, resume: result })
+    if (result._documentReview.complete) break
+    assert.equal(result._documentReview.pending, true)
+  }
+  assert.equal(result!._documentReview.complete, true)
+  assert.deepEqual(received, Array.from({ length: 65 }, (_, i) => i + 1))
+  assert.deepEqual(reduced, received)
+  assert.equal(result!.avaliacoes_por_lote.length, 9)
+  await assert.rejects(reviewDocuments({ ...opts, mission: 'outra missão', deadline: Date.now() + 60_000, resume: result }), /mudaram/)
+})
+
+test('erro no meio da leitura nunca é apresentado como revisão concluída', async () => {
+  const { sources } = await fixture(17)
+  const result = await reviewDocuments({ sources: [sources[0]], agent: 'BASILE', provider: 'openai', model: 'gpt-4o', mission: 'leitura', prompt: { system: '', user: '' }, resumable: true, deadline: Date.now() + 60_000,
+    llm: async opts => {
+      if (!opts.documents) assert.fail('síntese não pode ignorar páginas com falha')
+      if (opts.documents[0].pages.includes(9)) throw new Error('falha transitória')
+      return JSON.stringify({ avaliacao_documental_propria: 'Simulação' })
+    } })
+  assert.equal((result._documentReview as any).complete, false)
+  assert.equal((result._documentReview as any).pending, false)
+  assert.equal((result.cobertura_documental as ReviewCoverage).paginas.filter(p => p.processado).length, 9)
+})
+
 async function fixture(pageCount = 12, scanned = false) {
   const pdf = await PDFDocument.create()
   const font = await pdf.embedFont(StandardFonts.Helvetica)

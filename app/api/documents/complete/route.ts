@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createDocument } from '@/lib/db';
@@ -9,6 +10,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import { readStoredFile } from '@/lib/storage';
 import { publicDocument } from '@/lib/public-document';
+import { validatePdfSize } from '@/lib/document-limits';
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -25,6 +27,8 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = await readStoredFile(cloud_storage_path, contentType ?? 'application/pdf', false);
+    try { validatePdfSize(bytes.length); }
+    catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 413 }); }
     const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
 
     const doc = await createDocument({

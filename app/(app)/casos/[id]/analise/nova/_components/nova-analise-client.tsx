@@ -1,4 +1,5 @@
 'use client'
+import { fetchAnalysisStream } from '@/lib/analysis-stream'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -57,7 +58,7 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
     setCurrentLabel('Iniciando análise...')
 
     try {
-      const res = await fetch('/api/analysis/run', {
+      const res = await fetchAnalysisStream('/api/analysis/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,6 +96,8 @@ export function NovaAnaliseClient({ caseId }: { caseId: string }) {
               const data = JSON.parse(line.slice(6))
               if (data?.status === 'agent_start') {
                 setCurrentLabel(friendlyProgressLabel(data?.agent))
+              } else if (data?.status === 'document_progress') {
+                setCurrentLabel(`${friendlyProgressLabel(data.agent)} — ${data.processed}/${data.total} páginas`)
               } else if (data?.status === 'agent_complete') {
                 setCurrentLabel(friendlyProgressLabel(data?.agent))
               } else if (data?.status === 'completed') {

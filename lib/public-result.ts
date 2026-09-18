@@ -186,6 +186,11 @@ export function publicAnalysis(value: RecordValue, documents: SourceDocument[] =
   })) as Record<typeof resultFields[number], PublicResult | null>
   const c = object(value.case)
   return { id: value.id, caseId: value.caseId, status: value.status, createdAt: value.createdAt, completedAt: value.completedAt,
+    documentProgress: resultFields.flatMap(field => {
+      const coverage = object(object(value[field]).cobertura_documental)
+      const pages = list(coverage.paginas)
+      return pages.length ? [{ agent: field.replace('Result', ''), processed: pages.filter(p => object(p).processado === true).length, total: pages.length }] : []
+    }),
     icpScore: typeof value.icpScore === 'number' ? value.icpScore : null,
     case: { title: publicText(c.title), caseId: publicText(c.caseId) },
     ...results, conversation: publicConversation(value.conversation, documents, legalSources, value.missionLiteral) }

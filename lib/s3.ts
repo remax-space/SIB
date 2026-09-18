@@ -19,6 +19,11 @@ function shouldServeInline(contentType: string): boolean {
 
 const s3 = createS3Client();
 
+export async function writeFile(key: string, body: Buffer, contentType: string) {
+  const { bucketName } = getBucketConfig();
+  await s3.send(new PutObjectCommand({ Bucket: bucketName, Key: key, Body: body, ContentType: contentType }));
+}
+
 export async function generatePresignedUploadUrl(
   fileName: string,
   contentType: string,

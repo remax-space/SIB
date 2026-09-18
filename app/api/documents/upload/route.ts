@@ -8,6 +8,7 @@ import { ResearchError } from '@/lib/research/adapter';
 import { researchHttpError } from '@/lib/research/http';
 import { generateUploadTarget } from '@/lib/storage';
 import { rateLimit } from '@/lib/rate-limit';
+import { validatePdfSize } from '@/lib/document-limits';
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth(); if (gate instanceof NextResponse) return gate;
@@ -18,6 +19,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { caseId, fileName, contentType, fileSize } = body ?? {};
+    try { validatePdfSize(fileSize); }
+    catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 413 }); }
 
     if (!caseId || !fileName || !contentType) {
       return NextResponse.json({ error: 'Campos obrigatórios: caseId, fileName, contentType' }, { status: 400 });

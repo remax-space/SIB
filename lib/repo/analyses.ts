@@ -8,6 +8,27 @@ import { assertCaseWritableInTransaction } from './research'
 
 const COLLECTION = 'analyses'
 
+// A lease outlives the route's 300s ceiling; crashed requests can be resumed.
+export async function claimAnalysisRun(id: string): Promise<string | null> {
+  const db = getDb(), ref = db.collection(COLLECTION).doc(id)
+  const token = crypto.randomUUID()
+  return db.runTransaction(async tx => {
+    const snap = await tx.get(ref)
+    if (!snap.exists || Number(snap.data()?.runLeaseUntil ?? 0) > Date.now()) return null
+    await assertCaseWritableInTransaction(tx, String(snap.data()?.caseId))
+    tx.update(ref, { runLeaseToken: token, runLeaseUntil: Date.now() + 330_000 })
+    return token
+  })
+}
+
+export async function releaseAnalysisRun(id: string, token: string) {
+  const db = getDb(), ref = db.collection(COLLECTION).doc(id)
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref)
+    if (snap.exists && snap.data()?.runLeaseToken === token) tx.update(ref, { runLeaseToken: null, runLeaseUntil: 0 })
+  })
+}
+
 const RESULT_FIELDS = [
   'basileResult',
   'advocadoResult',
@@ -160,7 +181,7 @@ export async function createAnalysis(input: {
   return toAnalysis(created.id, created.data() ?? {})
 }
 
-export async function updateAnalysis(id: string, input: Record<string, unknown>) {
+export async function updateAnalysis(id: string, input: Record<string, unknown>, options: { returnRecord?: boolean } = {}) {
   const db = getDb()
   const ref = db.collection(COLLECTION).doc(id)
   const snap = await ref.get()
@@ -170,7 +191,8 @@ export async function updateAnalysis(id: string, input: Record<string, unknown>)
   for (const field of UPDATE_FIELDS) {
     if (input[field] === undefined) continue
     if ((RESULT_FIELDS as readonly string[]).includes(field)) {
-      const packed = await storeLargeJson(id, field, input[field])
+      // Six independent page logs must not accumulate above Firestore's 1 MiB limit.
+      const packed = await storeLargeJson(id, field, input[field], true)
       data[field] = packed.stored
       continue
     }
@@ -190,7 +212,7 @@ export async function updateAnalysis(id: string, input: Record<string, unknown>)
       tx.update(ref, data as any)
     })
   }
-  return getAnalysisById(id)
+  return options.returnRecord === false ? { id } : getAnalysisById(id)
 }
 
 export async function deleteAnalysisRecord(id: string, bumpCounter = true, options: { allowCaseDeleting?: boolean } = {}) {

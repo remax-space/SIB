@@ -14,6 +14,9 @@ import { AGENTS, LEGAL_CLASSES } from '@/lib/constants'
 import { formatAgentOutput } from '@/lib/format-agent-output'
 import { ConversationTable } from '@/components/conversation-table'
 import { putUploadedFile } from '@/lib/upload-file'
+import { readPdfPreview } from '@/lib/pdf-preview-upload'
+import { validatePdfSize } from '@/lib/document-limits'
+import { fetchAnalysisStream } from '@/lib/analysis-stream'
 import { extractCnjFromText, type PdfCaseMetadataField } from '@/lib/pdf-case-metadata'
 
 const AGENT_FIELDS: Record<string, string> = {
@@ -112,6 +115,7 @@ export function DashboardClient() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    try { validatePdfSize(file.size) } catch (error) { toast.error((error as Error).message); return }
 
     setPdfFile(file)
     setPdfName(file.name)
@@ -122,23 +126,8 @@ export function DashboardClient() {
     if (fromName && !caseId.trim()) setCaseId(fromName)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/documents/preview-metadata', {
-        method: 'POST',
-        body: formData,
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast.error(data?.error ?? 'Não foi possível ler o PDF.')
-        applyExtractedMetadata({ caseId: fromName }, {
-          caseId,
-          clientName,
-          legalClassTouched: legalClassTouchedRef.current,
-        })
-        setCorpusStatus(file.name)
-        return
-      }
+      const data = await readPdfPreview(file, setCorpusStatus)
+      if (data.error) toast.error(data.error)
 
       applyExtractedMetadata({
         caseId: data?.caseId || fromName,
@@ -271,7 +260,7 @@ export function DashboardClient() {
 
       const mission = complement.trim()
 
-      const analysisRes = await fetch('/api/analysis/run', {
+      const analysisRes = await fetchAnalysisStream('/api/analysis/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -311,6 +300,7 @@ export function DashboardClient() {
               if (event.status === 'agent_start' && event.agent) {
                 updateAgent(event.agent, { status: 'running' })
               }
+              if (event.status === 'document_progress') setCorpusStatus(`Leitura: ${event.processed}/${event.total} páginas — ${event.agent}`)
 
               if (event.status === 'agent_complete' && event.agent && newAnalysisId) {
                 const aRes = await fetch(`/api/analysis/${newAnalysisId}`)
@@ -388,7 +378,7 @@ export function DashboardClient() {
 
             </div>
             <div>
-              <label htmlFor="document-name" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">Documento PDF (obrigatório)</label>
+              <label htmlFor="document-name" className="text-xs font-bold text-foreground tracking-wide mb-1.5 block">Documento PDF (até 200 MB)</label>
               <Input id="document-name" aria-required="true" aria-invalid={submitted && !pdfFile} aria-describedby={submitted && !pdfFile ? "document-error" : undefined}
                 value={pdfName}
                 readOnly

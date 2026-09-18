@@ -1,4 +1,5 @@
 'use client'
+import { fetchAnalysisStream } from '@/lib/analysis-stream'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -19,6 +20,17 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
   const [analysis, setAnalysis] = useState<Analysis | null>(null), [error, setError] = useState('')
   const [retry, setRetry] = useState(0), [evidence, setEvidence] = useState<Evidence | null>(null)
   const router = useRouter()
+  const [resuming, setResuming] = useState(false)
+  async function resumeReading() {
+    setResuming(true)
+    try {
+      const response = await fetchAnalysisStream('/api/analysis/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeAnalysisId: analysisId }) })
+      if (!response.ok) throw new Error((await response.json()).error)
+      setRetry(r => r + 1)
+      await response.text()
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Falha ao retomar leitura.') }
+    finally { setResuming(false); setRetry(r => r + 1) }
+  }
   useEffect(() => {
     let stopped = false, timer: ReturnType<typeof setTimeout>
     async function load() {
@@ -46,6 +58,8 @@ export function AnalysisResultClient({ caseId, analysisId }: { caseId: string; a
     {!analysis && !error && <p role="status">Carregando análise…</p>}
     {analysis && <>
       <p role="status" className="text-sm">{analysis.status === 'EM_ANDAMENTO' ? 'Análise em andamento. Os resultados disponíveis aparecem abaixo.' : analysis.status === 'ERRO' ? 'A análise foi interrompida. Os resultados disponíveis foram preservados.' : results.some(r => r.result!.state !== 'ready') ? 'Análise finalizada com pontos pendentes. Confira as ressalvas.' : 'Análise finalizada. Confira as fontes antes de usar o resultado.'}</p>
+      {analysis.status !== 'CONCLUIDO' && <div className="space-y-2"><Button disabled={resuming} onClick={() => void resumeReading()}>{resuming ? 'Lendo páginas restantes…' : 'Retomar leitura dos documentos'}</Button><p className="text-xs text-muted-foreground">Mantenha esta página aberta para continuar automaticamente. Se a conexão cair, o progresso salvo será retomado.</p></div>}
+      {analysis.documentProgress?.map(progress => <p key={progress.agent} className="text-sm">{labels[resultFields.indexOf(`${progress.agent}Result` as typeof resultFields[number])]}: {progress.processed}/{progress.total} páginas processadas.</p>)}
       {analysis.icpScore != null && <p className="text-sm">Índice de suporte documental: <strong>{Number(analysis.icpScore).toFixed(1)}/100</strong>. É uma estimativa sobre os documentos, não uma probabilidade de êxito.</p>}
       {results.length > 0 && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={copy}>Copiar resultado</Button><Button variant="outline" onClick={download}>Exportar resultado</Button></div>}
       {main ? <Card><CardHeader><CardTitle>{main.label}</CardTitle></CardHeader><CardContent><PublicResult result={main.result!} title={main.label} /></CardContent></Card> : <p>Ainda não há resultado disponível.</p>}

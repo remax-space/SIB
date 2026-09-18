@@ -1,18 +1,20 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
 import { previewPdfCaseMetadata } from '@/lib/pdf-preview'
+import { MAX_PDF_BYTES, PDF_SIZE_ERROR } from '@/lib/document-limits'
 
-const MAX_BYTES = 20 * 1024 * 1024
+const MAX_BYTES = MAX_PDF_BYTES
 
 export async function POST(request: NextRequest) {
   const gate = await requireAuth()
   if (gate instanceof NextResponse) return gate
 
-  const rl = rateLimit(`preview-meta:${(gate.user as { id?: string } | undefined)?.id ?? 'anon'}`, 12, 60_000)
+  const rl = rateLimit(`preview-meta:${(gate.user as { id?: string } | undefined)?.id ?? 'anon'}`, 120, 60_000)
   if (!rl.ok) {
     return NextResponse.json({ error: `Muitas leituras em sequência. Aguarde ${rl.retryAfter}s.` }, { status: 429 })
   }
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'O arquivo precisa ser um PDF.' }, { status: 400 })
     }
     if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: 'PDF acima de 20 MB. Digite os dados manualmente.' }, { status: 413 })
+      return NextResponse.json({ error: PDF_SIZE_ERROR }, { status: 413 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())

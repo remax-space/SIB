@@ -120,6 +120,12 @@ export function extractCnjFromText(text: string): string {
 }
 
 export function extractLegalClassFromText(text: string): string {
+  // Projudi exports a wrapped taxonomy under “Tipo Ação”, with dotted leaders.
+  const action = text.match(/tipo\s+(?:de\s+)?a[çc][ãa]o[.\s]*:\s*([\s\S]*?)(?=\n\s*(?:segredo|fase|data|valor|prioridade|ju[íi]zo|\d+\.\s*partes)|$)/i)
+  if (action?.[1]) {
+    const leaf = action[1].replace(/-\s*>/g, '->').split('->').at(-1)?.replace(/\s+/g, ' ').trim()
+    if (leaf && leaf.length <= 160) return matchLegalClass(leaf) || leaf
+  }
   const explicit = text.match(/\bclasse(?:\s+(?:processual|judicial))?(?:\s+da\s+a[çc][ãa]o)?\s*[:–—-]?\s*([^\n\r|;]{3,140})/i)
   if (explicit?.[1]) {
     const value = explicit[1].split(/\s+(?:assunto|[óo]rg[ãa]o|autor|requerente|processo|compet[êe]ncia)\s*:/i)[0].replace(/^\s*\d+\s*[-–—:]\s*/, '').trim()

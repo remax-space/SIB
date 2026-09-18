@@ -1,11 +1,24 @@
-# Acesso documental de Mestre e Orientador
+# Leitura documental dos seis agentes e PDFs de até 200 MB
+
+## Atualização: arquivos extensos
+
+- Limite de 200 MiB por PDF (`MAX_PDF_BYTES`), validado no navegador, preparação do upload, gravação, cadastro e abertura do original. O total selecionado por análise é limitado a 512 MiB.
+- Upload direto ao armazenamento; envio local ou fallback em partes de até 3 MiB, com validação do tamanho de cada parte e montagem antes do cadastro. Assim, uma requisição de entrada não precisa transportar os 200 MiB. Partes de envios concluídos são removidas; envios abandonados podem deixar temporários em `upload-parts/`, que devem ter uma política de expiração no armazenamento.
+- Prévia de metadados em trechos menores. A capa estruturada do Projudi prevalece sobre processos anexados; classe hierárquica e polo ativo são reconhecidos sem IA quando legíveis.
+- Os seis agentes fazem leitura própria dos originais, em lotes de até oito páginas. A análise só termina após todos os agentes previstos no modo concluírem as páginas e a síntese. Falhas interrompem a conclusão e preservam o que já foi processado.
+- Checkpoints vinculados ao agente, provedor/modelo, missão, corte temporal, documentos e respectivos hashes. Retomadas não repetem lotes concluídos. Mudanças nesses parâmetros exigem nova análise. Uma trava transacional impede duas execuções simultâneas do mesmo registro.
+- Cada requisição tem duração limitada e processa até seis lotes por agente. O navegador solicita a próxima etapa automaticamente. Ao fechar a página, o processamento para após a etapa em curso; o botão **Retomar leitura dos documentos** no resultado continua com o mesmo registro. Não há worker autônomo em segundo plano.
+- Notas extensas são consolidadas hierarquicamente, sem excluir os registros originais por lote. As consolidações também são preservadas para retomada. Resultados e checkpoints ficam em blobs imutáveis, fora do limite de 1 MiB do Firestore; falhas na recuperação desses blobs não são tratadas como resultados vazios.
+- A interface mostra páginas processadas/total por agente. Processamento de todas as páginas não garante compreensão perfeita ou acerto jurídico; ressalvas e evidências permanecem disponíveis.
+
+Testes: `npm run test:documents`. Para verificar o transporte das 618 páginas do exemplo aos seis agentes com respostas simuladas, defina `PDF_REGRESSION_FILE` com o caminho local do PDF e execute `npx tsx --test tests/large-pdf.test.ts`. O documento do usuário não é incluído no repositório. Esses testes não fazem chamadas pagas nem avaliam a qualidade do raciocínio jurídico.
 
 A causa era estrutural: o Mestre recebia somente interpretações anteriores; o Orientador recebia texto truncado. `callLLM` não transportava documentos. A persistência podia registrar tamanho e prévia mesmo quando o texto completo não era salvo.
 
 ## Implementação
 
 - Uploads calculam SHA-256 e tamanho a partir dos bytes armazenados. O cadastro antigo usava caminho + horário, causando falsa divergência de integridade. `npx tsx --require dotenv/config scripts/repair-document-hashes.ts <IDs>` verifica esse padrão; `--apply` corrige apenas correspondências comprovadas e preserva o valor anterior. A nova referência comprova o arquivo atual, não sua integridade retroativa.
-- A análise, inclusive SOMENTE_BASILE, abre os originais antes de executar agentes. Basile recebe a camada textual com páginas físicas sem depender da extração manual; documentos com páginas sem texto, recursos visuais ou corpus acima de 60 mil caracteres passam pela revisão documental em lotes. Originais indisponíveis bloqueiam o início; nenhuma página processada pelo Basile resulta em erro explícito. Resultados antigos não são recalculados automaticamente.
+- A análise, inclusive SOMENTE_BASILE, abre os originais antes de executar agentes, sem depender da extração manual. Todos os documentos passam pela revisão em lotes. Originais indisponíveis bloqueiam o início. Resultados antigos não são recalculados automaticamente.
 - `lib/document-sources.ts`: valida seleção, abre originais via `readStoredFile`, confere SHA-256, conta páginas físicas e identifica recursos visuais. Os originais são baixados uma vez por execução e compartilhados pelos dois revisores.
 - `lib/llm-documents.ts` e `lib/llm.ts`: contrato comum de anexos. OpenAI usa Responses/input_file; Anthropic usa document/base64; Gemini usa inline_data/application/pdf. Cada anexo identifica documento, hash e páginas originais.
 - `lib/document-review.ts`: cada revisor percorre o acervo em lotes de até oito páginas antes de receber as interpretações anteriores. A síntese pode solicitar páginas complementares, com validação do identificador e da página. Modelos sem suporte PDF confirmado usam texto por página e OCR visual quando necessário/disponível.
@@ -19,9 +32,9 @@ A causa era estrutural: o Mestre recebia somente interpretações anteriores; o 
 
 `envio_tentado`, `enviado` e `processado` são registros distintos. Uma resposta válida do provedor não comprova compreensão integral. Trechos são conferidos contra a camada textual da página física; isso verifica correspondência textual, não a verdade jurídica da afirmação. Evidências visuais/OCR continuam marcadas como não verificadas automaticamente.
 
-Lotes acima de 8 MiB codificados são subdivididos; uma página isolada excessiva fica explicitamente não processada. Textos densos são fragmentados sem descarte. O orçamento de originais é 128 MiB por execução. A síntese tem orçamento explícito de contexto: quando excedido, os registros por lote permanecem e a síntese fica parcial, sem corte silencioso. Há até duas rodadas de consulta complementar. Tempo é reservado para persistir resultados antes dos limites das rotas.
+Lotes acima de 8 MiB codificados são subdivididos; uma página isolada excessiva fica explicitamente não processada. Textos densos são fragmentados sem descarte. O orçamento de originais é 512 MiB por execução, com até 200 MiB por arquivo. A síntese consolida notas quando necessário e mantém orçamento explícito de contexto: quando comparações/fontes externas ainda excedem esse orçamento, os registros permanecem e a síntese fica pendente, sem corte silencioso. Há até duas rodadas de consulta complementar por execução. Tempo é reservado para persistir resultados antes dos limites das rotas.
 
-Não há worker ou retomada automática de páginas pendentes: outra solicitação na mesa inicia uma nova revisão. Acervos que não couberem no tempo, memória ou contexto ficam parciais e identificam páginas pendentes; não são apresentados como revisão documental integral. O acesso do sistema continua compartilhado entre usuários autenticados, conforme a política existente; não foi criada uma política fictícia de propriedade de casos.
+O fluxo da análise inicial tem retomada automática enquanto a página está aberta e retomada manual pelo resultado. Uma nova solicitação na mesa é uma revisão distinta, limitada ao prazo daquela solicitação; a retomada do processamento principal não se confunde com uma nova pergunta. Acervos ilegíveis, páginas isoladas que excedam o transporte do provedor e falhas de IA ficam explicitamente pendentes. O acesso do sistema continua compartilhado entre usuários autenticados, conforme a política existente.
 
 ## Validação
 

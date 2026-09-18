@@ -1,4 +1,5 @@
 'use client'
+import { fetchAnalysisStream } from '@/lib/analysis-stream'
 
 import { ExpandedView } from '@/components/expanded-view'
 import { CheckCircle2 } from 'lucide-react'
@@ -69,7 +70,7 @@ export function LegalResearch({ analysisId, initialQuery = '', onEvidence }: { a
   async function reprocess() {
     if (!evidence) return
     await act(async () => {
-      const response = await fetch('/api/analysis/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId: context!.caseId, sourceAnalysisId: analysisId, evidenceId: evidence.id }) })
+      const response = await fetchAnalysisStream('/api/analysis/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId: context!.caseId, sourceAnalysisId: analysisId, evidenceId: evidence.id }) })
       if (!response.ok) throw new Error((await response.json()).error)
       const id = response.headers.get('X-Analysis-Id')
       if (!id) throw new Error('Análise sem identificador; consulte o caso.')

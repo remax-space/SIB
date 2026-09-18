@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib'
 import { extractText } from 'unpdf'
 import type { LlmDocument } from './llm-documents'
+import { MAX_PDF_BYTES, validatePdfSize } from './document-limits'
 
 export class DocumentSelectionError extends Error {}
 export function validateDocumentSelection(caseId: string, ids: unknown, docs: Record<string, unknown>[]) {
@@ -25,10 +26,12 @@ export async function prepareSources(docs: Record<string, unknown>[], read: (key
     const source: Source = { id: String(doc.id), filename: String(doc.filename), sha256: '', pageCount: null, pages: [] }
     sources.push(source)
     try {
-      if (Number(doc.fileSize ?? 0) + totalBytes > 128 * 1024 * 1024) throw new Error('Orçamento de memória dos originais excedido (128 MiB por execução)')
+      if (Number(doc.fileSize ?? 0) > MAX_PDF_BYTES) validatePdfSize(Number(doc.fileSize))
+      if (Number(doc.fileSize ?? 0) + totalBytes > 512 * 1024 * 1024) throw new Error('Selecione até 512 MB de documentos por análise (200 MB por PDF).')
       const bytes = await read(String(doc.cloudStoragePath), String(doc.mimeType), Boolean(doc.isPublic))
       totalBytes += bytes.length
-      if (totalBytes > 128 * 1024 * 1024) throw new Error('Orçamento de memória dos originais excedido (128 MiB por execução)')
+      validatePdfSize(bytes.length)
+      if (totalBytes > 512 * 1024 * 1024) throw new Error('Selecione até 512 MB de documentos por análise (200 MB por PDF).')
       source.sha256 = createHash('sha256').update(bytes).digest('hex')
       if (doc.sha256 && doc.sha256 !== source.sha256) throw new Error('Hash do original diverge do documento cadastrado')
       source.pdf = await PDFDocument.load(bytes)

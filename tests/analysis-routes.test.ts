@@ -7,10 +7,11 @@ import { contextVersion } from '../lib/research/identity'
 import { createHash } from 'node:crypto'
 import { prepareSources } from '../lib/document-sources'
 
-async function harness(file: string, options: { foreign?: boolean; missing?: boolean; unauthenticated?: boolean; evidence?: boolean; failFirst?: boolean; noText?: boolean; scanned?: boolean; unreadable?: boolean } = {}) {
+async function harness(file: string, options: { foreign?: boolean; missing?: boolean; unauthenticated?: boolean; evidence?: boolean; failFirst?: boolean; noText?: boolean; scanned?: boolean; unreadable?: boolean; pages?: number } = {}) {
   const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica)
   const page = pdf.addPage()
   if (!options.scanned) page.drawText('PAGAMENTO NO ORIGINAL', { font })
+  for (let i = 1; i < (options.pages ?? 1); i++) pdf.addPage().drawText(`PAGINA ${i + 1}`, { font })
   const bytes = Buffer.from(await pdf.save())
   const documents = [{ id: 'd1', caseId: options.foreign ? 'other' : 'case', filename: 'documento.pdf', extractedText: options.noText ? '' : 'PAGAMENTO', textSource: options.noText ? 'NO_TEXT' : 'FULL_TEXT' }]
   const state: Record<string, any> = { id: 'analysis', caseId: 'case', status: 'CONCLUIDO', provider: 'openai', modelUsed: 'gpt-4o', documentIds: ['d1'], missionLiteral: 'Apure pagamento', conversation: [], case: { cutoffDate: '2025-01-01' } }
@@ -27,6 +28,7 @@ async function harness(file: string, options: { foreign?: boolean; missing?: boo
       createAnalysis: async (data: any) => { Object.assign(state, data); return { id: 'analysis' } },
       updateAnalysis: async (_id: string, data: any) => { updates.push(structuredClone(data)); Object.assign(state, structuredClone(data)); return state },
       getAnalysisById: async () => structuredClone(state), setSetting: async () => undefined, getSetting: async () => null,
+      claimAnalysisRun: async () => 'lease', releaseAnalysisRun: async () => undefined,
     },
     'lib/storage': { readStoredFile: async () => { downloads++; if (options.unreadable) throw new Error('Original indisponível'); return bytes } },
     'lib/repo/research': {
@@ -49,6 +51,23 @@ async function harness(file: string, options: { foreign?: boolean; missing?: boo
   return { ...loaded, state, calls, updates, receipts, evidence, downloads: () => downloads }
 }
 const request = (body: unknown) => new NextRequest('http://localhost/api/test', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } })
+
+test('análise longa retoma o mesmo registro, percorre todas as páginas e não repete lotes concluídos', async () => {
+  const h = await harness('app/api/analysis/run/route.ts', { pages: 65 })
+  try {
+    const first = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'], runMode: 'SOMENTE_BASILE' }))
+    const initial = await first.text()
+    assert.match(initial, /"status":"continuation"/)
+    assert.doesNotMatch(initial, /"status":"completed"/)
+    assert.equal(h.state.status, 'EM_ANDAMENTO')
+    assert.equal(h.state.basileResult.cobertura_documental.paginas.filter((p: any) => p.processado).length, 48)
+    const second = await h.route.POST(request({ resumeAnalysisId: 'analysis' }))
+    assert.match(await second.text(), /"status":"completed"/)
+    assert.equal(h.state.status, 'CONCLUIDO')
+    assert.deepEqual(h.calls.flatMap(c => c.documents?.flatMap((d: any) => d.pages) ?? []), Array.from({ length: 65 }, (_, i) => i + 1))
+    assert.equal(h.state.basileResult.cobertura_documental.paginas.length, 65)
+  } finally { h.dispose() }
+})
 
 test('upload calcula hash e tamanho dos bytes e mantém rejeição de original alterado', async () => {
   const pdf = await PDFDocument.create(); pdf.addPage()
@@ -85,10 +104,14 @@ test('rota inicial mantém SSE, ordem, persistência e fontes próprias dos dois
     assert.equal(h.state.status, 'CONCLUIDO')
     assert.equal(h.downloads(), 1)
     const documentCalls = h.calls.filter(c => c.documents?.length)
-    assert.equal(documentCalls.length, 2)
-    assert.match(documentCalls[0].system, /MESTRE/)
-    assert.match(documentCalls[1].system, /ORIENTADOR/)
-    assert.deepEqual(documentCalls[0].documents, documentCalls[1].documents)
+    assert.equal(documentCalls.length, 6)
+    assert.match(documentCalls[4].system, /MESTRE/)
+    assert.match(documentCalls[5].system, /ORIENTADOR/)
+    for (const call of documentCalls) {
+      assert.equal(call.documents[0].sha256, documentCalls[0].documents[0].sha256)
+      assert.deepEqual(call.documents[0].pages, [1])
+      assert.equal((await PDFDocument.load(Buffer.from(call.documents[0].base64, 'base64'))).getPageCount(), 1)
+    }
     assert.ok(h.updates.some(u => u.mestreResult?.cobertura_documental?.status === 'EM_ANDAMENTO'))
     assert.ok(h.state.orientacoesResult.cobertura_documental.paginas[0].processado)
   } finally { h.dispose() }
@@ -99,10 +122,9 @@ test('SOMENTE_BASILE lê o original mesmo sem extração salva e não executa re
   try {
     const response = await h.route.POST(request({ caseId: 'case', documentIds: ['d1'], runMode: 'SOMENTE_BASILE' }))
     assert.match(await response.text(), /completed/)
-    assert.equal(h.calls.length, 1)
+    assert.equal(h.calls.length, 2)
     assert.equal(h.downloads(), 1)
-    assert.match(h.calls[0].user, /PAGAMENTO NO ORIGINAL/)
-    assert.match(h.calls[0].user, /Página física 1/)
+    assert.deepEqual(h.calls[0].documents[0].pages, [1])
     assert.equal(h.state.status, 'CONCLUIDO')
   } finally { h.dispose() }
 })
@@ -189,7 +211,7 @@ test('rota SSE distribui snapshot aos seis agentes, registra recibos e preserva 
     const prompts = h.calls.filter(c => c.user.includes('PACOTE DE FONTES JURÍDICAS'))
     assert.ok(prompts.length >= 6)
     for (const prompt of prompts) assert.match(prompt.user, /FUNDAMENTO EXTERNO COMUM/)
-    assert.equal(h.calls.filter(c => c.documents?.length).length, 2)
+    assert.equal(h.calls.filter(c => c.documents?.length).length, 6)
   } finally { h.dispose() }
 })
 

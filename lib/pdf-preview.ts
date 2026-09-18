@@ -67,6 +67,15 @@ export async function previewPdfCaseMetadata(opts: {
   let metadata = parsePdfCaseMetadata(localText, opts.fileName)
   let source = localText.replace(/\s+/g, '').length >= 20 ? 'pdf' : 'filename'
 
+  // A structured court cover is authoritative over the proceedings attached
+  // later. Avoid sending hundreds of pages to a model to rediscover its fields.
+  const cover = localText.split('[Página 2]')[0]
+  const coverMetadata = parsePdfCaseMetadata(cover)
+  if (/dados\s+processo/i.test(cover) && /tipo\s+a[çc][ãa]o/i.test(cover)
+    && /polo\s+ativo/i.test(cover) && !missingPdfCaseMetadataFields(coverMetadata).length) {
+    return { metadata: coverMetadata, missing: [], source: 'pdf' }
+  }
+
   // Read the original even when a text layer exists: mixed/scanned pages and
   // column order can make apparently complete local matches incorrect.
   try {

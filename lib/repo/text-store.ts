@@ -44,7 +44,7 @@ export async function storeLargeJson(analysisId: string, field: string, value: u
   if (!forceStorage && (!json || Buffer.byteLength(json) < MAX_INLINE_JSON)) {
     return { stored: value, pointer: null as string | null }
   }
-  const path = analysisFieldPath(analysisId, field)
+  const path = `analyses/${analysisId}/${field}/${crypto.randomUUID()}.json`
   await getBucket().file(path).save(json, {
     contentType: 'application/json',
     resumable: false,
@@ -59,8 +59,9 @@ export async function readLargeJson(value: unknown) {
   try {
     const [buf] = await getBucket().file(path).download()
     return JSON.parse(buf.toString('utf8'))
-  } catch {
-    return value
+  } catch (error) {
+    console.error('Persisted analysis unavailable:', error)
+    throw new Error('Não foi possível recuperar o resultado persistido; retome após restabelecer o armazenamento.')
   }
 }
 

@@ -12,6 +12,7 @@ import { ArrowLeft, Upload, FileText, Brain, Trash2, Eye, RefreshCw, Plus } from
 import { CASE_STATUSES, READ_STATUSES, ANALYSIS_STATUSES, getIcpClass } from '@/lib/constants'
 import { toast } from 'sonner'
 import { putUploadedFile } from '@/lib/upload-file'
+import { validatePdfSize } from '@/lib/document-limits'
 import { StatusExplanation } from '@/components/status-explanation'
 import { DeleteCaseDialog } from '@/components/case-delete-dialog'
 
@@ -41,6 +42,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         if (!file) continue
+        try { validatePdfSize(file.size) } catch (error) { toast.error((error as Error).message); continue }
 
         // Step 1: Get presigned URL
         const presignRes = await fetch('/api/documents/upload', {

@@ -4,6 +4,7 @@ import {
   generatePresignedUploadUrl,
   getFileUrl as s3GetFileUrl,
   deleteFile as s3DeleteFile,
+  writeFile as s3WriteFile,
 } from './s3'
 import { getBucket } from '@/lib/firebase/admin'
 
@@ -72,6 +73,7 @@ export async function writeLocalFile(key: string, body: Buffer) {
 }
 
 export async function writeStoredFile(key: string, body: Buffer, contentType?: string) {
+  if (storageDriver() === 's3') return s3WriteFile(safeKey(key), body, contentType || 'application/octet-stream')
   if (storageDriver() === 'firebase') {
     await getBucket().file(safeKey(key)).save(body, {
       resumable: false,
@@ -92,7 +94,7 @@ export async function readStoredFile(
     const [buf] = await getBucket().file(key).download()
     return buf
   }
-  if (driver === 'local' || key.startsWith('uploads/')) {
+  if (driver === 'local') {
     return fs.readFile(resolveLocal(key))
   }
 
@@ -114,7 +116,7 @@ export async function deleteStoredFile(key: string) {
     }
     return
   }
-  if (driver === 'local' || key.startsWith('uploads/')) {
+  if (driver === 'local') {
     try {
       await fs.unlink(resolveLocal(key))
     } catch (err: any) {
